@@ -35,7 +35,6 @@ class Node:
         #     1. If destination exsits in routing_table: update route + metrics
         #     2. Else add destination, routes, and metics to routing_table
 
-        # Check if destination exists in routing table:
         for i in range(len(self.routing_table)):
             if (self.routing_table[i][0] == destination):
                 self.routing_table[i][1] == routes
@@ -69,11 +68,12 @@ def network_simulator(env, nodes):
 # Create environment
 env = simpy.Environment()
 
-# Create 3 nodes
+# Create 3 nodes for main nodes
 nodes = []
 zone_radius = 2
 for i in range(3):
     nodes.append(Node(env,i,zone_radius))
+
 
 # Find and set neighbours
 neighbours_id_list = [(nodes[(i-1) % len(nodes)].node_id, nodes[(i+1) % len(nodes)].node_id) for i in range(len(nodes))]
