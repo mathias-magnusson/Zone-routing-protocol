@@ -1,15 +1,17 @@
 import simpy
 import random
 from tabulate import tabulate
+import LoadData
 
 class Node:
-    def __init__(self, env, node_id: int, zone_radius: int, neighbours = None):
+    def __init__(self, env, node_id: int, zone_radius: int, neighbours = None, position = None):
         self.env = env
         self.node_id = node_id
         self.zone_radius = zone_radius
         self.routing_table = {}
         self.neighbours = neighbours # List of nodes
         self.packet_queue = simpy.Store(env)
+        self.position = position
 
     def send_packet(self):
         while True:
@@ -42,6 +44,9 @@ class Node:
 
             else:
                 self.routing_table.append(destination, routes, metrics)
+    
+    def get_position_at_time(self, time_index: int):
+        return self.position[time_index]
 
 
 def network_simulator(env, nodes):
@@ -71,9 +76,11 @@ env = simpy.Environment()
 # Create 3 nodes for main nodes
 nodes = []
 zone_radius = 2
-for i in range(3):
-    nodes.append(Node(env,i,zone_radius))
+for i in range(5):
+    nodes.append(Node(env, i, zone_radius, position=LoadData.get_position_data(i)))
 
+#print(nodes[0].get_position_at_time(0))
+#print(nodes[4].get_position_at_time(0))
 
 # Find and set neighbours
 neighbours_id_list = [(nodes[(i-1) % len(nodes)].node_id, nodes[(i+1) % len(nodes)].node_id) for i in range(len(nodes))]
