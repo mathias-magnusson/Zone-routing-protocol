@@ -48,7 +48,15 @@ class Node:
                 self.routing_table.append(destination, routes, metrics)
     
     def get_position_at_time(self, time_index: int):
-        return self.position[time_index]
+        series_str = self.position[time_index]
+        parts = series_str.split()
+        # Check if there are at least two parts (numbers) in the string
+        if len(parts) >= 2:
+            # Convert the parts to float and create a tuple
+            tuple_with_two_numbers = (float(parts[0]), float(parts[1]))
+        else:
+            print("Not enough numbers in the string to create a tuple")  
+        return tuple_with_two_numbers
     
     def isNeighbourInLOS(self, time_index, neighbour):
         """ Assumes an altitude of 718km """
@@ -61,7 +69,7 @@ class Node:
         neighbour_lat = neighbour_coordinates[0]
         neighbour_lon = neighbour_coordinates[1]
 
-        if (distance(self_lat, self_lon, neighbour_lat, neighbour_lon) < 6000):
+        if (distance.distance(self_lat, self_lon, neighbour_lat, neighbour_lon) < 6000):
             return True
         
         return False
