@@ -2,6 +2,8 @@ import simpy
 import random
 from tabulate import tabulate
 import LoadData
+from math import acos, sin, cos
+import distance
 
 class Node:
     def __init__(self, env, node_id: int, zone_radius: int, neighbours = None, position = None):
@@ -17,7 +19,7 @@ class Node:
         while True:
             packet = yield self.packet_queue.get()
             yield self.env.timeout(random.uniform(0.1, 0.5)) # Simulate transmission
-            print(f"Node {self.node_id} sent packet to its neigbours {self.neighbours}")
+            print(f"Node {self.node_id} sent packet to its neigbours")
             for neighbour in self.neighbours:
                 # Get correct element in node array
                 yield self.env.process(neighbour.receive_packet(packet))
@@ -47,7 +49,23 @@ class Node:
     
     def get_position_at_time(self, time_index: int):
         return self.position[time_index]
+    
+    def isNeighbourInLOS(self, time_index, neighbour):
+        """ Assumes an altitude of 718km """
 
+        self_coordinates = self.get_position_at_time(time_index)
+        self_lat = self_coordinates[0]
+        self_lon = self_coordinates[1]
+
+        neighbour_coordinates = neighbour.get_position_at_time(time_index)
+        neighbour_lat = neighbour_coordinates[0]
+        neighbour_lon = neighbour_coordinates[1]
+
+        if (distance(self_lat, self_lon, neighbour_lat, neighbour_lon) < 6000):
+            return True
+        
+        return False
+    
 
 def network_simulator(env, nodes):
     # Simulate packet sending process for each node
@@ -56,18 +74,15 @@ def network_simulator(env, nodes):
 
     initial_packet = "Initial packet"
     hello_packet = "Hello"
+
     # for node in nodes:
-    #     hello_packet = hello_packet + f" from node {node.node_id}"
-    #     nodes[node.node_id].packet_queue.put(initial_packet)
-    #     nodes[node.node_id].packet_queue.put(hello_packet)
-    for node in nodes:
-        hello_packet = f" from node {node.node_id}"
-        node.packet_queue.put(initial_packet)
-        node.packet_queue.put(hello_packet)
+    #     hello_packet = f" from node {node.node_id}"
+    #     node.packet_queue.put(initial_packet)
+    #     node.packet_queue.put(hello_packet)
 
 
     # Run simulation for 5 time units
-    yield env.timeout(50)
+    yield env.timeout(5)
 
 
 # Create environment
@@ -79,8 +94,11 @@ zone_radius = 2
 for i in range(5):
     nodes.append(Node(env, i, zone_radius, position=LoadData.get_position_data(i)))
 
-#print(nodes[0].get_position_at_time(0))
-#print(nodes[4].get_position_at_time(0))
+print(f"Node 0 position at T = 0: {nodes[0].get_position_at_time(0)}")
+print(f"Node 4 {nodes[4].get_position_at_time(0)}")
+
+los = nodes[0].isNeighbourInLOS(0, nodes[4])
+print(los)
 
 # Find and set neighbours
 neighbours_id_list = [(nodes[(i-1) % len(nodes)].node_id, nodes[(i+1) % len(nodes)].node_id) for i in range(len(nodes))]

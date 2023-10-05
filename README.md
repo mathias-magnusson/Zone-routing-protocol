@@ -31,7 +31,7 @@ Terminal (temporary setting):
 export MY_PROJECT_FILE_PATH=/path/to/your/file/filename.txt
 ```
 
-Environment Configuration File (e.g., .env): Create a '.env' file in your project's root folder, and add the file configuration as below.
+Environment Configuration File (e.g., .env): Create a '.env' file in your project's root folder, and add line below to the .env-file.
 ```plaintext
 MY_PROJECT_FILE_PATH=/path/to/your/file/filename.txt
 ```
