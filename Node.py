@@ -13,21 +13,104 @@ class Node:
         self.zone_radius = zone_radius
         self.routing_table = {}
         self.neighbours = neighbours # List of nodes
-        self.packet_queue = simpy.Store(env)
+        self.packet_queue = simpy.Store(env, capacity=100)
         self.position = position
+
+    def iarp(self):
+        # Generate an advertisement packet with TTL = p - 1.
+        packet = {
+            "Type": "ADVERTISEMENT",
+            "Node Id": self.node_id,
+            "TTL" : zone_radius - 1,
+            "Source neighbours": self.neighbours,
+            "Originator neighbours": self.neighbours,
+            "Path" : []
+        }
+
+        self.packet_queue.put(packet)
+        self.send_packet()
+        
+        # Append a list of e.g., 2-hop neighbours
+
+        pass
 
     def send_packet(self):
         while True:
             packet = yield self.packet_queue.get()
             yield self.env.timeout(random.uniform(0.1, 0.5)) # Simulate transmission
-            print(f"Node {self.node_id} sent packet to its neigbours")
-            for neighbour in self.neighbours:
-                # Get correct element in node array
-                yield self.env.process(neighbour.receive_packet(packet))
+            print(f"Node {self.node_id} sent {packet} to its neigbours")
+
+            if(packet["Type"] == "ADVERTISEMENT"):
+                # Filter out neighbour that already received ADVERTISEMENT
+                source_neigbours = packet["Source neighbours"]
+                filtered_neighbours = list(filter(lambda x: x not in source_neigbours, self.neighbours))
+
+                for neighbour in filtered_neighbours:
+                    yield self.env.process(neighbour.receive_packet(packet))
+
+            if(packet["Type"] == "ADVERTISEMENT REPLY"):
+                path = packet["Path"]
+                index_of_self = path.index(self.node_id)
+
+                # if(index_of_self == path[0]):
+                #     # We are at source node
+                #     pass
+
+                # We are not at source node. Follow the reverse path
+                next_node_id = path[index_of_self-1]
+                next_node = list(filter(lambda x: x.node_id == next_node_id, self.neighbours))
+                yield self.env.process(next_node.receive_packet(packet))
+            
+            else:
+                for neighbour in self.neighbours:
+                    # Get correct element in node array
+                    yield self.env.process(neighbour.receive_packet(packet))
 
     def receive_packet(self, packet):
         yield self.env.timeout(0) # Process received packet immediately
+
+        # Pass to handler if advertisement packet
+        if(packet["Type"] == "ADVERTISEMENT"):
+            self._handle_advertisement(packet)
+
+        if(packet["Type"] == "ADVERTISEMENT REPLY"):
+            path = packet["Path"]
+            index_of_self = path.index(self.node_id)
+
+            if(index_of_self == path[0]):
+                self.update_routing_table()
+
+            else:
+                # Call send_packet again? 
+                pass
+
         print(f"Node {self.node_id} received packet: {packet}")
+
+
+    def _handle_advertisement(self, packet):
+        """
+        Handles advertisements. If TTL == 0 the advertisement is discarded and not forwarded.
+        The node appends its ID to the path in order to return a reply to the source node.
+        """
+        # Update path
+        packet["Path"].append(self.node_id)
+
+        ttl = packet["TTL"] - 1
+        # If TTL is 0, change packet to ADV Reply and return to source
+        if (ttl >= 0):
+            packet["Type"] = "ADVERTISEMENT REPLY"
+            # Send the new packet
+            self.packet_queue.put(packet)
+            self.send_packet()
+        
+        # If not, forward advertisement to neighbours
+        self.send_packet()
+
+
+    def _receive_advertisement(self, packet):
+        yield self.env.timeout(0) # Process received packet immediately
+        print(f"Node {self.node_id} received packet: {packet}")
+
 
     def update_routing_table(self, destination: int, routes: list, metrics: list):
         # Routing table template
@@ -100,7 +183,6 @@ class Node:
 
         self.neighbours = list
 
-
 def network_simulator(env, nodes):
     # Simulate packet sending process for each node
     for node in nodes:
@@ -108,12 +190,6 @@ def network_simulator(env, nodes):
 
     initial_packet = "Initial packet"
     hello_packet = "Hello"
-
-    # for node in nodes:
-    #     hello_packet = f" from node {node.node_id}"
-    #     node.packet_queue.put(initial_packet)
-    #     node.packet_queue.put(hello_packet)
-
 
     # Run simulation for 5 time units
     yield env.timeout(5)
