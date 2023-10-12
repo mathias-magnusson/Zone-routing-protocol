@@ -4,6 +4,7 @@ from tabulate import tabulate
 import LoadData
 from math import acos, sin, cos
 import distance
+import numpy as np
 
 class Node:
     def __init__(self, env, node_id: int, zone_radius: int, neighbours = None, position = None):
@@ -74,6 +75,31 @@ class Node:
         
         return False
     
+    def areNeigboursInLOS(self, time_index):
+
+        self_coordinates = self.get_position_at_time(time_index)
+        self_lat = self_coordinates[0]
+        self_lon = self_coordinates[1]
+
+        for neighbour in self.neighbours:
+            neighbour_coordinates = neighbour.get_position_at_time(time_index)
+            neighbour_lat = neighbour_coordinates[0]
+            neighbour_lon = neighbour_coordinates[1]
+
+            if (distance.distance(self_lat, self_lon, neighbour_lat, neighbour_lon) > 6000):
+                return False
+            
+        return True   
+
+    def findNeighbourNodes(self, nodes, time_index):
+        list = []
+        for node in nodes:
+            if (node is not self):
+                if (self.isNeighbourInLOS(time_index, node)):
+                    list.append(node)
+
+        self.neighbours = list
+
 
 def network_simulator(env, nodes):
     # Simulate packet sending process for each node
@@ -92,29 +118,29 @@ def network_simulator(env, nodes):
     # Run simulation for 5 time units
     yield env.timeout(5)
 
-
 # Create environment
 env = simpy.Environment()
 
-# Create 3 nodes for main nodes
+# Create nodes
 nodes = []
 zone_radius = 2
-for i in range(5):
+for i in range(66):
     nodes.append(Node(env, i, zone_radius, position=LoadData.get_position_data(i)))
 
-print(f"Node 0 position at T = 0: {nodes[0].get_position_at_time(0)}")
-print(f"Node 4 {nodes[4].get_position_at_time(0)}")
+#print(f"Node 0 position at T = 0: {nodes[0].get_position_at_time(0)}")
+#print(f"Node 4 {nodes[4].get_position_at_time(0)}")
 
-los = nodes[0].isNeighbourInLOS(0, nodes[4])
-print(los)
-
-# Find and set neighbours
-neighbours_id_list = [(nodes[(i-1) % len(nodes)].node_id, nodes[(i+1) % len(nodes)].node_id) for i in range(len(nodes))]
-
+# finding neighbour nodes for all nodes at time: 0 
 for node in nodes:
-    neighbour_tuple = neighbours_id_list[node.node_id]
-    node.neighbours = list(filter(lambda n: n.node_id == neighbour_tuple[0] or 
-                                  n.node_id ==neighbour_tuple[1], nodes))
+    node.findNeighbourNodes(nodes, 0)
+    print(f"Node {node.node_id} neigbours:", end= " ")
+    for neigh in node.neighbours:
+        print(neigh.node_id, end=" ")
+    print()
+
+# Are neighbours still neighbours
+los = nodes[0].areNeigboursInLOS(0)
+print(los)
 
 # Run the simulation
 env.process(network_simulator(env,nodes))
