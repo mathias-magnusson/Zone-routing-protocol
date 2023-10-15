@@ -32,8 +32,6 @@ class Node:
         
         # Append a list of e.g., 2-hop neighbours
 
-        pass
-
     def send_packet(self):
         while True:
             packet = yield self.packet_queue.get()
@@ -42,6 +40,11 @@ class Node:
 
             if(packet["Type"] == "ADVERTISEMENT"):
                 # Filter out neighbour that already received ADVERTISEMENT
+                if(packet["Source neighbours"] == packet["Originator neighbours"]):
+                    # It must be the source handling this: send to all neighbours without filtering
+                    for neighbour in packet["Originator neighbours"]:
+                        yield self.env.process(neighbour.receive_packet(packet))
+
                 source_neigbours = packet["Source neighbours"]
                 filtered_neighbours = list(filter(lambda x: x not in source_neigbours, self.neighbours))
 
@@ -67,21 +70,26 @@ class Node:
                     yield self.env.process(neighbour.receive_packet(packet))
 
     def receive_packet(self, packet):
+        print(f"Node with id {self.node_id}: Received packet")
         yield self.env.timeout(0) # Process received packet immediately
 
         # Pass to handler if advertisement packet
         if(packet["Type"] == "ADVERTISEMENT"):
+            print(f"Node with id {self.node_id}: Received ADVERTISMENT")
+
             self._handle_advertisement(packet)
 
         if(packet["Type"] == "ADVERTISEMENT REPLY"):
+            print(f"Node with id {self.node_id}: Received ADVERTISEMENT REPLY")
             path = packet["Path"]
             index_of_self = path.index(self.node_id)
 
             if(index_of_self == path[0]):
-                self.update_routing_table()
+                print(f"Node with id {self.node_id}: Updating Routing Table")
+                #self.update_routing_table()
 
             else:
-                # Call send_packet again? 
+                print(f"Node with id {self.node_id}: What do I do now?")
                 pass
 
         print(f"Node {self.node_id} received packet: {packet}")
@@ -98,6 +106,7 @@ class Node:
         ttl = packet["TTL"] - 1
         # If TTL is 0, change packet to ADV Reply and return to source
         if (ttl >= 0):
+            print(f"Node with id {self.node_id}: ADVERTISEMENT REPLY")
             packet["Type"] = "ADVERTISEMENT REPLY"
             # Send the new packet
             self.packet_queue.put(packet)
@@ -200,7 +209,7 @@ env = simpy.Environment()
 # Create nodes
 nodes = []
 zone_radius = 2
-for i in range(66):
+for i in range(10):
     nodes.append(Node(env, i, zone_radius, position=LoadData.get_position_data(i)))
 
 #print(f"Node 0 position at T = 0: {nodes[0].get_position_at_time(0)}")
@@ -214,9 +223,12 @@ for node in nodes:
         print(neigh.node_id, end=" ")
     print()
 
+nodes[1].iarp()
+"""
 # Are neighbours still neighbours
 los = nodes[0].areNeigboursInLOS(0)
 print(los)
+"""
 
 # Run the simulation
 env.process(network_simulator(env,nodes))
