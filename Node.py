@@ -18,16 +18,24 @@ class Node:
 
     def iarp(self):
         # Generate an advertisement packet with TTL = p - 1.
-        packet = {
-            "Type": "ADVERTISEMENT",
-            "Node Id": self.node_id,
-            "TTL" : zone_radius - 1,
-            "Source neighbours": self.neighbours,
-            "Originator neighbours": self.neighbours,
-            "Path" : []
-        }
 
-        self.packet_queue.put(packet)
+        packet_list = []
+
+        for neighbour in self.neighbours:
+            packet = {
+                "Type": "ADVERTISEMENT",
+                "Node Id": self.node_id,
+                "TTL" : zone_radius - 1,
+                "Source neighbours": self.neighbours,
+                "Path" : [self.node_id],
+                "Packet size": 0
+            }
+
+            packet_list.append(packet)
+
+        for packet in packet_list:
+            self.packet_queue.put(packet)
+        
         self.send_packet()
         
         # Append a list of e.g., 2-hop neighbours
@@ -35,65 +43,66 @@ class Node:
     def send_packet(self):
         while True:
             packet = yield self.packet_queue.get()
+            packet_type = packet["Type"]
             yield self.env.timeout(random.uniform(0.1, 0.5)) # Simulate transmission
-            print(f"Node {self.node_id} sent {packet} to its neigbours")
+            print(f"Node {self.node_id} will try to send {packet_type} to its neigbours")
 
             if(packet["Type"] == "ADVERTISEMENT"):
-                # Filter out neighbour that already received ADVERTISEMENT
-                if(packet["Source neighbours"] == packet["Originator neighbours"]):
-                    # It must be the source handling this: send to all neighbours without filtering
-                    for neighbour in packet["Originator neighbours"]:
+                are_neighbours_equal = self._compare_neighbours(packet["Source neighbours"])
+                
+                if not(are_neighbours_equal):
+                    source_neigbours = packet["Source neighbours"]
+                    filtered_neighbours = list(filter(lambda x: x not in source_neigbours, self.neighbours))
+
+                    for neighbour in filtered_neighbours:
+                        yield self.env.process(neighbour.receive_packet(packet))
+                
+                else:
+                    for neighbour in packet["Source neighbours"]:
                         yield self.env.process(neighbour.receive_packet(packet))
 
-                source_neigbours = packet["Source neighbours"]
-                filtered_neighbours = list(filter(lambda x: x not in source_neigbours, self.neighbours))
-
-                for neighbour in filtered_neighbours:
-                    yield self.env.process(neighbour.receive_packet(packet))
-
-            if(packet["Type"] == "ADVERTISEMENT REPLY"):
+            elif(packet["Type"] == "ADVERTISEMENT REPLY"):
                 path = packet["Path"]
-                index_of_self = path.index(self.node_id)
-
-                # if(index_of_self == path[0]):
-                #     # We are at source node
-                #     pass
-
-                # We are not at source node. Follow the reverse path
-                next_node_id = path[index_of_self-1]
-                next_node = list(filter(lambda x: x.node_id == next_node_id, self.neighbours))
-                yield self.env.process(next_node.receive_packet(packet))
+                index_dest = path.index(self.node_id) - 1
+                destination_node = list(filter(lambda x: x.node_id == index_dest, self.neighbours))
+                yield self.env.process(destination_node.receive_packet(packet))
             
             else:
-                for neighbour in self.neighbours:
-                    # Get correct element in node array
-                    yield self.env.process(neighbour.receive_packet(packet))
+                print("I don't know this packet type")
 
     def receive_packet(self, packet):
-        print(f"Node with id {self.node_id}: Received packet")
         yield self.env.timeout(0) # Process received packet immediately
 
         # Pass to handler if advertisement packet
         if(packet["Type"] == "ADVERTISEMENT"):
-            print(f"Node with id {self.node_id}: Received ADVERTISMENT")
+            print(f"Node {self.node_id}: Received ADVERTISMENT")
 
-            self._handle_advertisement(packet)
+            # Update path. Note: We only simulate 1 
 
-        if(packet["Type"] == "ADVERTISEMENT REPLY"):
+            packet["Path"].append(self.node_id)
+
+            # If TTL is 0, change packet to ADV Reply and return it
+            if (packet["TTL"] == 0):
+                packet["Type"] = "ADVERTISEMENT REPLY"
+                self.packet_queue.put(packet)
+                self.send_packet()
+            
+            # If not, forward advertisement to neighbours
+            else:
+                packet["Source neighbours"] = self.neighbours
+                packet["TTL"] = packet["TTL"] - 1
+                self.packet_queue.put(packet)
+                self.send_packet()
+
+        elif(packet["Type"] == "ADVERTISEMENT REPLY"):
             print(f"Node with id {self.node_id}: Received ADVERTISEMENT REPLY")
             path = packet["Path"]
-            index_of_self = path.index(self.node_id)
 
-            if(index_of_self == path[0]):
-                print(f"Node with id {self.node_id}: Updating Routing Table")
-                #self.update_routing_table()
-
+            if(path[0] == self.node_id):
+                print(f"Back at origin. Updating routing table")
             else:
-                print(f"Node with id {self.node_id}: What do I do now?")
-                pass
-
-        print(f"Node {self.node_id} received packet: {packet}")
-
+                self.packet_queue.put(packet)
+                self.send_packet()
 
     def _handle_advertisement(self, packet):
         """
@@ -103,18 +112,31 @@ class Node:
         # Update path
         packet["Path"].append(self.node_id)
 
-        ttl = packet["TTL"] - 1
         # If TTL is 0, change packet to ADV Reply and return to source
-        if (ttl >= 0):
-            print(f"Node with id {self.node_id}: ADVERTISEMENT REPLY")
+        if (packet["TTL"] == 0):
+            #print(f"Node with id {self.node_id}: ADVERTISEMENT REPLY")
             packet["Type"] = "ADVERTISEMENT REPLY"
-            # Send the new packet
             self.packet_queue.put(packet)
             self.send_packet()
         
         # If not, forward advertisement to neighbours
-        self.send_packet()
+        else:
+            packet["Source neighbours"] = self.neighbours
+            packet["TTL"] = packet["TTL"] - 1
+            self.packet_queue.put(packet)
+            self.send_packet()
+    
 
+    def _compare_neighbours(self,source_list):
+        source_ids = []
+        self_neigbour_ids = []
+        for node in source_list:
+            source_ids.append(node.node_id)
+
+        for node in self.neighbours:
+            self_neigbour_ids.append(node.node_id)
+
+        return source_ids == self_neigbour_ids
 
     def _receive_advertisement(self, packet):
         yield self.env.timeout(0) # Process received packet immediately
@@ -223,7 +245,7 @@ for node in nodes:
         print(neigh.node_id, end=" ")
     print()
 
-nodes[1].iarp()
+nodes[2].iarp()
 """
 # Are neighbours still neighbours
 los = nodes[0].areNeigboursInLOS(0)
