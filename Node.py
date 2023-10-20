@@ -5,6 +5,7 @@ import LoadData
 from math import acos, sin, cos
 import distance
 import numpy as np
+import copy
 
 class Node:
     def __init__(self, env, node_id: int, zone_radius: int, neighbours = None, position = None):
@@ -17,10 +18,8 @@ class Node:
         self.position = position
 
     def iarp(self):
-        # Generate an advertisement packet with TTL = p - 1.
-
         packet_list = []
-
+        
         for neighbour in self.neighbours:
             packet = {
                 "Type": "ADVERTISEMENT",
@@ -36,11 +35,13 @@ class Node:
         for packet in packet_list:
             self.packet_queue.put(packet)
         
+        # Call once or just call for each neighbour?
         self.send_packet()
         
         # Append a list of e.g., 2-hop neighbours
 
     def send_packet(self):
+        print("send_packet() running")
         while True:
             packet = yield self.packet_queue.get()
             packet_type = packet["Type"]
@@ -78,8 +79,10 @@ class Node:
             print(f"Node {self.node_id}: Received ADVERTISMENT")
 
             # Update path. Note: We only simulate 1 
+            source_neighbours_ids = [neighbour.node_id for neighbour in packet["Source neighbours"]]
 
-            packet["Path"].append(self.node_id)
+            if not any(id in packet["Path"] for id in source_neighbours_ids):
+                packet["Path"].append(self.node_id)
 
             # If TTL is 0, change packet to ADV Reply and return it
             if (packet["TTL"] == 0):
@@ -102,30 +105,7 @@ class Node:
                 print(f"Back at origin. Updating routing table")
             else:
                 self.packet_queue.put(packet)
-                self.send_packet()
-
-    def _handle_advertisement(self, packet):
-        """
-        Handles advertisements. If TTL == 0 the advertisement is discarded and not forwarded.
-        The node appends its ID to the path in order to return a reply to the source node.
-        """
-        # Update path
-        packet["Path"].append(self.node_id)
-
-        # If TTL is 0, change packet to ADV Reply and return to source
-        if (packet["TTL"] == 0):
-            #print(f"Node with id {self.node_id}: ADVERTISEMENT REPLY")
-            packet["Type"] = "ADVERTISEMENT REPLY"
-            self.packet_queue.put(packet)
-            self.send_packet()
-        
-        # If not, forward advertisement to neighbours
-        else:
-            packet["Source neighbours"] = self.neighbours
-            packet["TTL"] = packet["TTL"] - 1
-            self.packet_queue.put(packet)
-            self.send_packet()
-    
+                self.send_packet()    
 
     def _compare_neighbours(self,source_list):
         source_ids = []
@@ -137,11 +117,6 @@ class Node:
             self_neigbour_ids.append(node.node_id)
 
         return source_ids == self_neigbour_ids
-
-    def _receive_advertisement(self, packet):
-        yield self.env.timeout(0) # Process received packet immediately
-        print(f"Node {self.node_id} received packet: {packet}")
-
 
     def update_routing_table(self, destination: int, routes: list, metrics: list):
         # Routing table template
@@ -219,8 +194,8 @@ def network_simulator(env, nodes):
     for node in nodes:
         env.process(node.send_packet())
 
-    initial_packet = "Initial packet"
-    hello_packet = "Hello"
+    # initial_packet = "Initial packet"
+    # hello_packet = "Hello"
 
     # Run simulation for 5 time units
     yield env.timeout(5)
@@ -233,9 +208,6 @@ nodes = []
 zone_radius = 2
 for i in range(10):
     nodes.append(Node(env, i, zone_radius, position=LoadData.get_position_data(i)))
-
-#print(f"Node 0 position at T = 0: {nodes[0].get_position_at_time(0)}")
-#print(f"Node 4 {nodes[4].get_position_at_time(0)}")
 
 # finding neighbour nodes for all nodes at time: 0 
 for node in nodes:
