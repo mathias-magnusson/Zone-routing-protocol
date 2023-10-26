@@ -159,10 +159,10 @@ class Node:
         for i in range(len(self.routing_table)):
             if (self.routing_table[i][0] == destination):
                 self.routing_table[i][1] == routes
-                self.routing_table[i][2] == metrics
+                self.routing_table[i][2] == metrics_table
 
             else:
-                self.routing_table.append(destination, routes, metrics)
+                self.routing_table.append(destination, routes, metrics_table)
     
     def get_position_at_time(self, time_index: int):
         series_str = self.position[time_index]
