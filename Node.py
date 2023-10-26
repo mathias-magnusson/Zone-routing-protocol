@@ -13,19 +13,18 @@ class Node:
         self.node_id = node_id
         self.zone_radius = zone_radius
         self.routing_table = {}
+        self.metrics_table = {}
         self.neighbours = neighbours # List of nodes
         self.packet_queue = []
         self.position = position
         self.nodes = []
 
     def iarp(self):
-        #yield self.env.timeout(0)      # Simulate time? 
         self.generate_iarp_packet()
         yield self.env.process(self.send_packet())
 
     def send_packet(self):
         for node in self.neighbours:       
-            #yield self.env.timeout(0)      # Simulate time?    
             if (len(self.packet_queue) == 0):
                 return
             packet = self.packet_queue.pop(0)             
@@ -54,19 +53,17 @@ class Node:
             #    yield env.timeout(0)
 
     def receive_packet(self, packet):
-        #yield self.env.timeout(0)      # Simulate time? 
-
-        if(packet["Type"] == "ADVERTISEMENT"):      # Pass to handler if advertisement packet
+        if(packet["Type"] == "ADVERTISEMENT"):
             print(f"Node {self.node_id}: Received ADVERTISMENT")
 
-            packet["Path"].append(self.node_id)     # Update path.         
+            packet["Path"].append(self.node_id)       
             
-            if (packet["TTL"] == 0):        # If TTL is 0, change packet to ADV Reply and return it
+            if (packet["TTL"] == 0):
                 packet["Type"] = "ADVERTISEMENT REPLY"
                 print(packet["Path"])
                 self.packet_queue.append(packet)
                 yield self.env.process(self.send_packet())
-            else:                           # If not, forward advertisement to neighbours
+            else:
                 packet["TTL"] = packet["TTL"] - 1
                 self.generate_iarp_packet(packet)
                 yield self.env.process(self.send_packet())
@@ -127,8 +124,28 @@ class Node:
             self_neigbour_ids.append(node.node_id)
 
         return source_ids == self_neigbour_ids
+    
+    def get_best_path_iarp(self, destination: int):
+        if destination not in self.metrics_table:
+            return None  # Key not found in metrics_table_table
 
-    def update_routing_table(self, destination: int, routes: list, metrics: list):
+        lists = self.metrics_table[destination]
+
+        # Initialize variables to track the best index and the minimum sum
+        best_index = 0
+        min_sum = sum(lists[0])
+
+        for index, sublist in enumerate(lists):
+            current_sum = sum(sublist)
+            if current_sum < min_sum:
+                best_index = index
+                min_sum = current_sum
+
+        values_for_destination = self.routing_table[destination]
+        best_path = values_for_destination[best_index]
+        return best_path           
+
+    def update_routing_table(self, destination: int, routes: list, metrics_table: list):
         # Routing table template
         # [(dest_addr_1, route list, metric list)]
         # Like this: [(1, [1], 5), (2, [1,2], [5, 10]), (3, [1,2,3], [5,10,15])]
