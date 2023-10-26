@@ -6,7 +6,6 @@ from math import acos, sin, cos
 import distance
 import numpy as np
 import copy
-import queue
 
 class Node:
     def __init__(self, env, node_id: int, zone_radius: int, neighbours = None, position = None):
@@ -15,49 +14,38 @@ class Node:
         self.zone_radius = zone_radius
         self.routing_table = {}
         self.neighbours = neighbours # List of nodes
-        self.packet_queue = queue.Queue()
+        self.packet_queue = []
         self.position = position
         self.nodes = []
 
     def iarp(self):
-        yield self.env.timeout(0)
-        packet_list = []
-        
-        for neighbour in self.neighbours:
-            packet = {
-                "Type": "ADVERTISEMENT",
-                "Node Id": self.node_id,
-                "TTL" : self.zone_radius - 1,
-                "Source neighbours": self.neighbours,
-                "Path" : [self.node_id],
-                "Packet size": 0
-            }
-
-            packet_list.append(packet)
-
-        for packet in packet_list:
-            self.packet_queue.put(packet)
-        
-        # Call once or just call for each neighbour?
+        #yield self.env.timeout(0)      # Simulate time? 
+        self.generate_iarp_packet()
         yield self.env.process(self.send_packet())
-        
-        # Append a list of e.g., 2-hop neighbours
 
-    def send_packet(self): 
-        for node in self.neighbours:            
-            packet = self.packet_queue.get()             
+    def send_packet(self):
+        for node in self.neighbours:       
+            #yield self.env.timeout(0)      # Simulate time?    
+            if (len(self.packet_queue) == 0):
+                return
+            packet = self.packet_queue.pop(0)             
             packet_type = packet["Type"]
-            #self.env.timeout(random.uniform(0.1, 0.5)) # Simulate transmission
-            print(f"Node {self.node_id} will try to send {packet_type} to its neigbours")
 
             if(packet["Type"] == "ADVERTISEMENT"):
+                node_not_in_path = True
                 for path_id in packet["Path"]:
-                    if node.node_id != path_id:
-                        yield self.env.process(node.receive_packet(packet))
+                    if node.node_id == path_id:
+                        node_not_in_path = False
+                    
+                if (node_not_in_path == True):
+                    print(f"Node {self.node_id} sending {packet_type} to Node {node.node_id}")
+                    yield self.env.process(node.receive_packet(packet))
+
             elif(packet["Type"] == "ADVERTISEMENT REPLY"):
                 path = packet["Path"]
                 index_dest = path.index(self.node_id) - 1
                 destination_node = self.find_node_by_id(path[index_dest])
+                print(f"Node {self.node_id} sending {packet_type} to Node {destination_node.node_id}")
                 yield self.env.process(destination_node.receive_packet(packet))
             else:
                 print("I don't know this packet type")
@@ -66,38 +54,56 @@ class Node:
             #    yield env.timeout(0)
 
     def receive_packet(self, packet):
-        #yield self.env.timeout(0) # Process received packet immediately
+        #yield self.env.timeout(0)      # Simulate time? 
 
-        # Pass to handler if advertisement packet
-        if(packet["Type"] == "ADVERTISEMENT"):
+        if(packet["Type"] == "ADVERTISEMENT"):      # Pass to handler if advertisement packet
             print(f"Node {self.node_id}: Received ADVERTISMENT")
 
-            # Update path.
-            packet["Path"].append(self.node_id)                
-
-            # If TTL is 0, change packet to ADV Reply and return it
-            if (packet["TTL"] == 0):
+            packet["Path"].append(self.node_id)     # Update path.         
+            
+            if (packet["TTL"] == 0):        # If TTL is 0, change packet to ADV Reply and return it
                 packet["Type"] = "ADVERTISEMENT REPLY"
                 print(packet["Path"])
-                self.packet_queue.put(packet)
+                self.packet_queue.append(packet)
                 yield self.env.process(self.send_packet())
-            # If not, forward advertisement to neighbours
-            else:
-                #packet["Source neighbours"] = self.neighbours
+            else:                           # If not, forward advertisement to neighbours
                 packet["TTL"] = packet["TTL"] - 1
-                self.packet_queue.put(packet)
+                self.generate_iarp_packet(packet)
                 yield self.env.process(self.send_packet())
+                
         elif(packet["Type"] == "ADVERTISEMENT REPLY"):
             print(f"Node with id {self.node_id}: Received ADVERTISEMENT REPLY")
             path = packet["Path"]
 
             if(path[0] == self.node_id):
-                print(f"Back at origin. Updating routing table")
-                print("\n")
-                #yield self.env.timeout(0)
+                print(f"Back at origin. Updating routing table\n")
             else:
-                self.packet_queue.put(packet)
+                self.packet_queue.append(packet)
                 yield self.env.process(self.send_packet())    
+
+    def generate_iarp_packet(self, currentPacket = None):
+        if (currentPacket == None):
+            for neighbour in self.neighbours:
+                packet = {
+                    "Type": "ADVERTISEMENT",
+                    "Node Id": self.node_id,
+                    "TTL" : self.zone_radius - 1,
+                    "Source neighbours": self.neighbours,
+                    "Path" : [self.node_id],
+                    "Packet size": 0
+                }
+                self.packet_queue.append(packet)
+        else:
+            for neighbour in self.neighbours:
+                packet = {
+                    "Type": currentPacket["Type"],
+                    "Node Id": currentPacket["Node Id"],
+                    "TTL" : currentPacket["TTL"],
+                    "Source neighbours": currentPacket["Source neighbours"],
+                    "Path" : currentPacket["Path"],
+                    "Packet size":currentPacket["Packet size"]
+                }
+                self.packet_queue.append(packet)
 
     def find_neighbour_nodes(self, nodes, time_index):
         list = []
