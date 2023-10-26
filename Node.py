@@ -6,6 +6,7 @@ from math import acos, sin, cos
 import distance
 import numpy as np
 import copy
+import queue
 
 class Node:
     def __init__(self, env, node_id: int, zone_radius: int, neighbours = None, position = None):
@@ -14,17 +15,19 @@ class Node:
         self.zone_radius = zone_radius
         self.routing_table = {}
         self.neighbours = neighbours # List of nodes
-        self.packet_queue = simpy.Store(env, capacity=100)
+        self.packet_queue = queue.Queue()
         self.position = position
+        self.nodes = []
 
     def iarp(self):
+        yield self.env.timeout(0)
         packet_list = []
         
         for neighbour in self.neighbours:
             packet = {
                 "Type": "ADVERTISEMENT",
                 "Node Id": self.node_id,
-                "TTL" : zone_radius - 1,
+                "TTL" : self.zone_radius - 1,
                 "Source neighbours": self.neighbours,
                 "Path" : [self.node_id],
                 "Packet size": 0
@@ -36,78 +39,79 @@ class Node:
             self.packet_queue.put(packet)
         
         # Call once or just call for each neighbour?
-        self.send_packet()
+        yield self.env.process(self.send_packet())
         
         # Append a list of e.g., 2-hop neighbours
 
-    def send_packet(self):
-        print("send_packet() running")
-        while True:
-            packet = yield self.packet_queue.get()
+    def send_packet(self): 
+        for node in self.neighbours:            
+            packet = self.packet_queue.get()             
             packet_type = packet["Type"]
-            yield self.env.timeout(random.uniform(0.1, 0.5)) # Simulate transmission
+            #self.env.timeout(random.uniform(0.1, 0.5)) # Simulate transmission
             print(f"Node {self.node_id} will try to send {packet_type} to its neigbours")
 
             if(packet["Type"] == "ADVERTISEMENT"):
-                are_neighbours_equal = self._compare_neighbours(packet["Source neighbours"])
-                
-                if not(are_neighbours_equal):
-                    source_neigbours = packet["Source neighbours"]
-                    filtered_neighbours = list(filter(lambda x: x not in source_neigbours, self.neighbours))
-
-                    for neighbour in filtered_neighbours:
-                        yield self.env.process(neighbour.receive_packet(packet))
-                
-                else:
-                    for neighbour in packet["Source neighbours"]:
-                        yield self.env.process(neighbour.receive_packet(packet))
-
+                for path_id in packet["Path"]:
+                    if node.node_id != path_id:
+                        yield self.env.process(node.receive_packet(packet))
             elif(packet["Type"] == "ADVERTISEMENT REPLY"):
                 path = packet["Path"]
                 index_dest = path.index(self.node_id) - 1
-                destination_node = list(filter(lambda x: x.node_id == index_dest, self.neighbours))
+                destination_node = self.find_node_by_id(path[index_dest])
                 yield self.env.process(destination_node.receive_packet(packet))
-            
             else:
                 print("I don't know this packet type")
+            
+            #if (self.packet_queue.empty()):
+            #    yield env.timeout(0)
 
     def receive_packet(self, packet):
-        yield self.env.timeout(0) # Process received packet immediately
+        #yield self.env.timeout(0) # Process received packet immediately
 
         # Pass to handler if advertisement packet
         if(packet["Type"] == "ADVERTISEMENT"):
             print(f"Node {self.node_id}: Received ADVERTISMENT")
 
-            # Update path. Note: We only simulate 1 
-            source_neighbours_ids = [neighbour.node_id for neighbour in packet["Source neighbours"]]
-
-            if not any(id in packet["Path"] for id in source_neighbours_ids):
-                packet["Path"].append(self.node_id)
+            # Update path.
+            packet["Path"].append(self.node_id)                
 
             # If TTL is 0, change packet to ADV Reply and return it
             if (packet["TTL"] == 0):
                 packet["Type"] = "ADVERTISEMENT REPLY"
+                print(packet["Path"])
                 self.packet_queue.put(packet)
-                self.send_packet()
-            
+                yield self.env.process(self.send_packet())
             # If not, forward advertisement to neighbours
             else:
-                packet["Source neighbours"] = self.neighbours
+                #packet["Source neighbours"] = self.neighbours
                 packet["TTL"] = packet["TTL"] - 1
                 self.packet_queue.put(packet)
-                self.send_packet()
-
+                yield self.env.process(self.send_packet())
         elif(packet["Type"] == "ADVERTISEMENT REPLY"):
             print(f"Node with id {self.node_id}: Received ADVERTISEMENT REPLY")
             path = packet["Path"]
 
             if(path[0] == self.node_id):
                 print(f"Back at origin. Updating routing table")
+                print("\n")
+                #yield self.env.timeout(0)
             else:
                 self.packet_queue.put(packet)
-                self.send_packet()    
+                yield self.env.process(self.send_packet())    
 
-    def _compare_neighbours(self,source_list):
+    def find_neighbour_nodes(self, nodes, time_index):
+        list = []
+        for node in nodes:
+            if (node is not self):
+                if (self.is_neighbour_in_LOS(time_index, node)):
+                    list.append(node)
+
+        self.neighbours = list
+
+    def set_all_nodes(self, nodes):
+        self.nodes = nodes
+
+    def compare_neighbours(self,source_list):
         source_ids = []
         self_neigbour_ids = []
         for node in source_list:
@@ -148,7 +152,7 @@ class Node:
             print("Not enough numbers in the string to create a tuple")  
         return tuple_with_two_numbers
     
-    def isNeighbourInLOS(self, time_index, neighbour):
+    def is_neighbour_in_LOS(self, time_index, neighbour):
         """ Assumes an altitude of 718km """
 
         self_coordinates = self.get_position_at_time(time_index)
@@ -164,66 +168,8 @@ class Node:
         
         return False
     
-    def areNeigboursInLOS(self, time_index):
-
-        self_coordinates = self.get_position_at_time(time_index)
-        self_lat = self_coordinates[0]
-        self_lon = self_coordinates[1]
-
-        for neighbour in self.neighbours:
-            neighbour_coordinates = neighbour.get_position_at_time(time_index)
-            neighbour_lat = neighbour_coordinates[0]
-            neighbour_lon = neighbour_coordinates[1]
-
-            if (distance.distance(self_lat, self_lon, neighbour_lat, neighbour_lon) > 6000):
-                return False
-            
-        return True   
-
-    def findNeighbourNodes(self, nodes, time_index):
-        list = []
-        for node in nodes:
-            if (node is not self):
-                if (self.isNeighbourInLOS(time_index, node)):
-                    list.append(node)
-
-        self.neighbours = list
-
-def network_simulator(env, nodes):
-    # Simulate packet sending process for each node
-    for node in nodes:
-        env.process(node.send_packet())
-
-    # initial_packet = "Initial packet"
-    # hello_packet = "Hello"
-
-    # Run simulation for 5 time units
-    yield env.timeout(5)
-
-# Create environment
-env = simpy.Environment()
-
-# Create nodes
-nodes = []
-zone_radius = 2
-for i in range(10):
-    nodes.append(Node(env, i, zone_radius, position=LoadData.get_position_data(i)))
-
-# finding neighbour nodes for all nodes at time: 0 
-for node in nodes:
-    node.findNeighbourNodes(nodes, 0)
-    print(f"Node {node.node_id} neigbours:", end= " ")
-    for neigh in node.neighbours:
-        print(neigh.node_id, end=" ")
-    print()
-
-nodes[2].iarp()
-"""
-# Are neighbours still neighbours
-los = nodes[0].areNeigboursInLOS(0)
-print(los)
-"""
-
-# Run the simulation
-env.process(network_simulator(env,nodes))
-env.run(until=3)
+    def find_node_by_id(self, node_id):
+        for node in self.nodes:
+            if node.node_id == node_id:
+                return node
+        return None  # Node not found
