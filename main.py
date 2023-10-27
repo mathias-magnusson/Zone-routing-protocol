@@ -8,7 +8,12 @@ from time import sleep
 def network_simulator(env, nodes):
     while True:
         for node in nodes:
+            node.routing_table_new.clear()
+            node.metrics_table_new.clear()
             yield env.process(node.iarp())
+            node.routing_table = node.routing_table_new
+            node.metrics_table = node.metrics_table_new
+            print(f"Node {node.node_id} routing table: {node.routing_table}")
         
         sleep(60)
         #yield env.process(nodes[2].iarp())

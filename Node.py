@@ -13,7 +13,9 @@ class Node:
         self.node_id = node_id
         self.zone_radius = zone_radius
         self.routing_table = {}
+        self.routing_table_new = {}
         self.metrics_table = {}
+        self.metrics_table_new = {}
         self.neighbours = neighbours # List of nodes
         self.packet_queue = []
         self.position = position
@@ -74,6 +76,8 @@ class Node:
 
             if(path[0] == self.node_id):
                 print(f"Back at origin. Updating routing table\n")
+                self.update_routing_table(destination=packet["Path"][-1], path=packet["Path"])
+                self.update_metrics_table(destination=packet["Path"][-1], metrics=[1, 1])
             else:
                 self.packet_queue.append(packet)
                 yield self.env.process(self.send_packet())    
@@ -127,7 +131,7 @@ class Node:
     
     def get_best_path_iarp(self, destination: int):
         if destination not in self.metrics_table:
-            return None  # Key not found in metrics_table_table
+            return None  # Key not found in metrics_table
 
         lists = self.metrics_table[destination]
 
@@ -145,24 +149,20 @@ class Node:
         best_path = values_for_destination[best_index]
         return best_path           
 
-    def update_routing_table(self, destination: int, routes: list, metrics_table: list):
-        # Routing table template
-        # [(dest_addr_1, route list, metric list)]
-        # Like this: [(1, [1], 5), (2, [1,2], [5, 10]), (3, [1,2,3], [5,10,15])]
-        # To access the first item-set: routing_table[0]
-        # To access the first item in the first set: routing_table[0][0]
+    def update_routing_table(self, destination: int, path: list):
+        # Check if key exists
+        if not destination in self.routing_table_new:
+            self.routing_table_new[destination] = []
+        
+        self.routing_table_new[destination].append(path)
 
-        # Use case:
-        #     1. If destination exsits in routing_table: update route + metrics
-        #     2. Else add destination, routes, and metics to routing_table
 
-        for i in range(len(self.routing_table)):
-            if (self.routing_table[i][0] == destination):
-                self.routing_table[i][1] == routes
-                self.routing_table[i][2] == metrics_table
+    def update_metrics_table(self, destination: int, metrics: list):
+        if not destination in self.metrics_table_new:
+            self.metrics_table_new[destination] = []
+        
+        self.metrics_table_new[destination].append(metrics)
 
-            else:
-                self.routing_table.append(destination, routes, metrics_table)
     
     def get_position_at_time(self, time_index: int):
         series_str = self.position[time_index]
