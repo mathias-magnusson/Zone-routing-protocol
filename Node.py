@@ -26,57 +26,45 @@ class Node:
         yield self.env.process(self.send_packet())
 
     def send_packet(self):
-        for node in self.neighbours:       
-            if (len(self.packet_queue) == 0):
-                return
+        while (len(self.packet_queue) != 0):
             packet = self.packet_queue.pop(0)             
             packet_type = packet["Type"]
+            next_node_string = packet["Next_node"]
 
             if(packet["Type"] == "ADVERTISEMENT"):
-                node_not_in_path = True
-                for path_id in packet["Path"]:
-                    if node.node_id == path_id:
-                        node_not_in_path = False
-                    
-                if (node_not_in_path == True):
-                    print(f"Node {self.node_id} sending {packet_type} to Node {node.node_id}")
-                    yield self.env.process(node.receive_packet(packet))
-
+                #print(f"Node {self.node_id} sending {packet_type} to Node {next_node_string}")
+                next_node = self.find_node_by_id(packet["Next_node"])
+                yield self.env.process(next_node.receive_packet(packet))
             elif(packet["Type"] == "ADVERTISEMENT REPLY"):
                 path = packet["Path"]
                 index_dest = path.index(self.node_id) - 1
                 destination_node = self.find_node_by_id(path[index_dest])
-                print(f"Node {self.node_id} sending {packet_type} to Node {destination_node.node_id}")
+                #print(f"Node {self.node_id} sending {packet_type} to Node {destination_node.node_id}")
                 yield self.env.process(destination_node.receive_packet(packet))
             else:
                 print("I don't know this packet type")
-            
-            #if (self.packet_queue.empty()):
-            #    yield env.timeout(0)
 
     def receive_packet(self, packet):
         if(packet["Type"] == "ADVERTISEMENT"):
-            print(f"Node {self.node_id}: Received ADVERTISMENT")
-
+            #print(f"Node {self.node_id}: Received ADVERTISMENT")
             packet["Path"].append(self.node_id)       
             
             if (packet["TTL"] == 0):
                 packet["Type"] = "ADVERTISEMENT REPLY"
-                print(packet["Path"])
                 self.packet_queue.append(packet)
                 yield self.env.process(self.send_packet())
             else:
                 packet["TTL"] = packet["TTL"] - 1
-                self.generate_iarp_packet(packet)
+                self.generate_iarp_packet(packet)              
                 yield self.env.process(self.send_packet())
                 
         elif(packet["Type"] == "ADVERTISEMENT REPLY"):
-            print(f"Node with id {self.node_id}: Received ADVERTISEMENT REPLY")
+            #print(f"Node with id {self.node_id}: Received ADVERTISEMENT REPLY")
             path = packet["Path"]
 
             if(path[0] == self.node_id):
-                print(f"Back at origin. Updating routing table\n")
-                self.update_routing_table(destination=packet["Path"][-1], path=packet["Path"])
+                #print(f"Back at origin. Updating routing table")
+                self.update_routing_table(path=packet["Path"])
                 self.update_metrics_table(destination=packet["Path"][-1], metrics=[1, 1])
             else:
                 self.packet_queue.append(packet)
@@ -88,22 +76,29 @@ class Node:
                 packet = {
                     "Type": "ADVERTISEMENT",
                     "Node Id": self.node_id,
+                    "Next_node": neighbour.node_id,
                     "TTL" : self.zone_radius - 1,
-                    "Source neighbours": self.neighbours,
                     "Path" : [self.node_id],
                     "Packet size": 0
                 }
                 self.packet_queue.append(packet)
         else:
             for neighbour in self.neighbours:
-                packet = {
-                    "Type": currentPacket["Type"],
-                    "Node Id": currentPacket["Node Id"],
-                    "TTL" : currentPacket["TTL"],
-                    "Source neighbours": currentPacket["Source neighbours"],
-                    "Path" : currentPacket["Path"],
-                    "Packet size":currentPacket["Packet size"]
-                }
+                node_not_in_path = True
+                for path_id in currentPacket["Path"]:
+                    if (neighbour.node_id == path_id):
+                        node_not_in_path = False
+                        
+                if (node_not_in_path == True):
+                    packet = copy.deepcopy(currentPacket)
+                    packet["Next_node"] = neighbour.node_id
+                    self.packet_queue.append(packet)
+
+            if (len(self.packet_queue) == 0):           # If no packet is appended a reply should be sent - fx when no neighbours and a full path isn't found
+                packet = copy.deepcopy(currentPacket)
+                packet["Next_node"] = neighbour.node_id
+                packet["TTL"] = 0
+                packet["Type"] = "ADVERTISEMENT REPLY"
                 self.packet_queue.append(packet)
 
     def find_neighbour_nodes(self, nodes, time_index):
@@ -149,13 +144,23 @@ class Node:
         best_path = values_for_destination[best_index]
         return best_path           
 
-    def update_routing_table(self, destination: int, path: list):
-        # Check if key exists
-        if not destination in self.routing_table_new:
-            self.routing_table_new[destination] = []
-        
-        self.routing_table_new[destination].append(path)
+    def update_routing_table(self, path: list):
+        path = path[1:]         # Excluding the node itself
 
+        while len(path) >= 1:
+            destination = path[-1]                                            
+            if not destination in self.routing_table_new:   # Check if key exists 
+                self.routing_table_new[destination] = []
+
+            not_in_path = True
+            for existing_path in self.routing_table_new[destination]:
+                if (path == existing_path):
+                    not_in_path = False
+            
+            if (not_in_path == True):
+                self.routing_table_new[destination].append(path)
+
+            path = path[:-1]
 
     def update_metrics_table(self, destination: int, metrics: list):
         if not destination in self.metrics_table_new:
