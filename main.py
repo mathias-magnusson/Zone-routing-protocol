@@ -10,18 +10,27 @@ def find_node_neighbours(nodes: [], index : int):
         node.find_neighbour_nodes(nodes, index)
         node.set_all_nodes(nodes)
 
+def sort_table(table):
+    sorted_routing = sorted(table.items())
+    return dict(sorted_routing)
 
 def network_simulator(env, nodes):
-    while True:
-        for node in nodes:
-            node.routing_table_new.clear()
-            node.metrics_table_new.clear()
-            yield env.process(node.iarp())
-            node.routing_table = node.routing_table_new
-            node.metrics_table = node.metrics_table_new
-            print(f"Node {node.node_id} routing table: {node.routing_table}\n")
-        
-        sleep(60)
+    for node in nodes:
+        node.routing_table_new.clear()
+        node.metrics_table_new.clear()
+        yield env.process(node.iarp())
+        node.routing_table = node.routing_table_new
+        node.metrics_table = node.metrics_table_new
+
+        node.routing_table = sort_table(node.routing_table)
+        node.metrics_table = sort_table(node.metrics_table)
+
+        print(f"Node {node.node_id} routing table: {node.routing_table}\n")
+        print(f"Node {node.node_id} metric table: {node.metrics_table}\n")
+
+    yield env.process(nodes[0].ierp(3))
+    
+    sleep(10)
 
 # Create environment
 env = simpy.Environment()
