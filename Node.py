@@ -242,20 +242,23 @@ class Node:
 
         else:
             new_nodes = []
-            for node_id in self.periphiral_nodes:
+            for peri_id in self.periphiral_nodes:
                 not_periphiral_node = True
-                for zone_node in self.get_all_nodes_in_zone(currentPacket["Previous Bordercast Address"]):
-                    if (node_id == zone_node):
-                        not_periphiral_node = False
+                for path_node_id in currentPacket["Path"]:
+                    if (not_periphiral_node == False):
                         break
+                    for zone_node_id in self.get_all_nodes_in_zone(path_node_id):
+                        if (peri_id == zone_node_id and self.node_id != path_node_id):
+                            not_periphiral_node = False
+                            break
                         
                 if (not_periphiral_node == True):
                     BRP_packet = copy.deepcopy(currentPacket)
                     BRP_packet["Query ID"] = self.node_id
                     BRP_packet["Previous Bordercast Address"] = self.node_id
-                    BRP_packet["Next_node"] = node_id               # Periphiral node
+                    BRP_packet["Next_node"] = peri_id               # Periphiral node
                     self.BRP_packet_queue.append(BRP_packet)
-                    new_nodes.append(node_id)
+                    new_nodes.append(peri_id)
             
             for packet in self.BRP_packet_queue:
                 for node_id in new_nodes:
@@ -274,7 +277,10 @@ class Node:
 
     def send_BRP_packet(self):
         while (len(self.BRP_packet_queue) > 0):
-            packet = self.BRP_packet_queue.pop(0)         
+            packet = self.BRP_packet_queue.pop(0)       
+
+            if (packet["Path"] == [0, 20, 39, 27, 6, 19, 10, 11, 43, 30, 39]):
+                print("----")
 
             if (packet["Type"] == "Bordercast"):
                 periphiral_node_id = packet["Next_node"]
