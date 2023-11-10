@@ -32,7 +32,6 @@ def network_simulator(env, nodes):
     print(nodes[0].paths_to_destinations)
     print(nodes[0].get_best_path_ierp(0))
     
-    sleep(10)
 
 # Create environment
 env = simpy.Environment()
@@ -40,7 +39,7 @@ env = simpy.Environment()
 # Create nodes
 nodes = []
 zone_radius = 2
-for i in range(43):
+for i in range(44):
     nodes.append(Node.Node(env, i, zone_radius, position=LoadData.get_position_data(i)))
 
 # finding neighbour nodes for all nodes at time: 0
