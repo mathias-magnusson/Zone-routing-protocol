@@ -31,7 +31,7 @@ class Node:
 
     def ierp(self, destination: int, packet = None):
         if (self.routing_table.get(destination) is not None):
-            print("Destination in zone")
+            #print("Destination in zone")
 
             if (packet == None):
                 self.paths_to_destinations.append(self.get_best_path_iarp(destination))
@@ -41,7 +41,7 @@ class Node:
             self.BRP_packet_queue.put(packet)
             yield self.env.process(self.send_BRP_packet())
         else:
-            #print(f"Node {self.node_id} sending BRP packet to periphiral nodes")
+            ##print(f"Node {self.node_id} sending BRP packet to periphiral nodes")
             self.find_periphiral_nodes()            
             if (packet != None):
                 self.generate_BRP_packet(destination, packet)
@@ -56,21 +56,21 @@ class Node:
             next_node_string = packet["Next_node"]
 
             if(packet["Type"] == "ADVERTISEMENT"):
-                #print(f"Node {self.node_id} sending {packet_type} to Node {next_node_string}")
+                ##print(f"Node {self.node_id} sending {packet_type} to Node {next_node_string}")
                 next_node = self.find_node_by_id(packet["Next_node"])
                 yield self.env.process(next_node.receive_packet(packet))
             elif(packet["Type"] == "ADVERTISEMENT REPLY"):
                 path = packet["Path"]
                 index_dest = path.index(self.node_id) - 1
                 destination_node = self.find_node_by_id(path[index_dest])
-                #print(f"Node {self.node_id} sending {packet_type} to Node {destination_node.node_id}")
+                ##print(f"Node {self.node_id} sending {packet_type} to Node {destination_node.node_id}")
                 yield self.env.process(destination_node.receive_packet(packet))
             else:
                 print("I don't know this packet type")
 
     def receive_packet(self, packet):
         if(packet["Type"] == "ADVERTISEMENT"):
-            #print(f"Node {self.node_id}: Received ADVERTISMENT")
+            ##print(f"Node {self.node_id}: Received ADVERTISMENT")
             packet["Path"].append(self.node_id)       
             
             if (packet["TTL"] == 0):
@@ -83,11 +83,11 @@ class Node:
                 yield self.env.process(self.send_packet())
                 
         elif(packet["Type"] == "ADVERTISEMENT REPLY"):
-            #print(f"Node with id {self.node_id}: Received ADVERTISEMENT REPLY")
+            ##print(f"Node with id {self.node_id}: Received ADVERTISEMENT REPLY")
             path = packet["Path"]
 
             if(path[0] == self.node_id):
-                #print(f"Back at origin. Updating routing table")
+                ##print(f"Back at origin. Updating routing table")
                 self.update_tables(path=packet["Path"])
             else:
                 self.packet_queue.put(packet)
@@ -294,31 +294,31 @@ class Node:
 
             if (packet["Type"] == "Bordercast"):
                 periphiral_node_id = packet["Next_node"]
-                #print(f"Node {self.node_id} Bordercasting to {periphiral_node_id}")
+                ##print(f"Node {self.node_id} Bordercasting to {periphiral_node_id}")
                 best_path = self.get_best_path_iarp(periphiral_node_id)
                 yield self.env.process(self.find_node_by_id(best_path.pop(0)).receive_BRP_packet(packet, best_path))
             elif (packet["Type"] == "Reply"):
                 path = packet["Path"]
                 index_dest = path.index(self.node_id) - 1       
                 destination_node = self.find_node_by_id(path[index_dest])
-                #print(f"Node {self.node_id} sending reply to {destination_node.node_id}")
+                ##print(f"Node {self.node_id} sending reply to {destination_node.node_id}")
                 yield self.env.process(destination_node.receive_BRP_packet(packet))
 
     def receive_BRP_packet(self, packet, best_path = None): 
         if (packet["Type"] == "Bordercast"):
-            #print(f"Node {self.node_id}: Received Bordercast")
+            ##print(f"Node {self.node_id}: Received Bordercast")
             if (len(best_path) > 0):  
                 yield self.env.process(self.forward_BRP_packet(best_path, packet))
             else:
-                #print(f"Periphiral node reached - Node: {self.node_id}")
+                ##print(f"Periphiral node reached - Node: {self.node_id}")
                 packet["Path"].append(self.node_id)
                 yield self.env.process(self.ierp(packet["Query Destination Address"], packet))
         elif (packet["Type"] == "Reply"):
             path = packet["Path"]
-            #print(f"Node {self.node_id}: Received Reply")
+            ##print(f"Node {self.node_id}: Received Reply")
             if(path[0] == self.node_id):
-                #print(f"Back at origin")
-                #print(path)
+                ##print(f"Back at origin")
+                ##print(path)
                 self.paths_to_destinations.append(path)
                 # send data along path 
             else:
@@ -326,7 +326,7 @@ class Node:
                 yield self.env.process(self.send_BRP_packet())   
 
     def forward_BRP_packet(self, best_path, packet):
-        #print(f"Forwarding to {best_path[0]}")
+        ##print(f"Forwarding to {best_path[0]}")
         yield self.env.process(self.find_node_by_id(best_path.pop(0)).receive_BRP_packet(packet, best_path))
 
     def send_data(self):
