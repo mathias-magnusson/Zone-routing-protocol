@@ -31,9 +31,6 @@ class Node:
     def ierp(self, destination: int, packet = None):
         if (self.routing_table.get(destination) is not None):
             print("Destination in zone")
-            #path_to_destination = self.get_best_path_iarp(destination)
-            #for item in path_to_destination:
-            #    packet["Path"].append(item)   
 
             if (packet == None):
                 self.paths_to_destinations.append(self.get_best_path_iarp(destination))
@@ -156,15 +153,30 @@ class Node:
         min_hop = min(self.metrics_table[destination])          
         best_path_index = self.metrics_table[destination].index(min_hop)
 
-        # If two have the same number of hops it returns the first one
-        # I.e. [2,1] [13, 1] returns [2,1]
         return copy.deepcopy(self.routing_table[destination][best_path_index])          
 
     def get_best_path_ierp(self, destination : int):
-        ## Make for real. 
+        paths = []
 
-        min_length = min(len(sublist) for sublist in self.paths_to_destinations)
-        best_paths = [sublist for sublist in self.paths_to_destinations if len(sublist) == min_length]
+        for path in self.paths_to_destinations:         ## Check if the path is within the zone of the start node
+            if (self.routing_table.get(destination) is not None):
+                return path
+
+            asking_node_id = path[0]
+            path = path[1:]
+            path.append(destination)
+            full_path_list = []
+            for node_id in path:
+                path_to_destination = self.nodes[asking_node_id].get_best_path_iarp(node_id)
+                asking_node_id = node_id
+                
+                for item in path_to_destination:
+                    full_path_list.append(item)
+                
+            paths.append(full_path_list)
+
+        min_length = min(len(sublist) for sublist in paths)
+        best_paths = [sublist for sublist in paths if len(sublist) == min_length]
         return best_paths
 
     def update_tables(self, path: list):
@@ -278,9 +290,6 @@ class Node:
     def send_BRP_packet(self):
         while (len(self.BRP_packet_queue) > 0):
             packet = self.BRP_packet_queue.pop(0)       
-
-            if (packet["Path"] == [0, 20, 39, 27, 6, 19, 10, 11, 43, 30, 39]):
-                print("----")
 
             if (packet["Type"] == "Bordercast"):
                 periphiral_node_id = packet["Next_node"]
