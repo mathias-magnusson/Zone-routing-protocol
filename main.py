@@ -3,7 +3,7 @@ import sys
 import simpy
 import Node
 import LoadData
-from time import sleep
+import time
 
 def find_node_neighbours(nodes: [], index : int):
     for node in nodes:
@@ -15,6 +15,7 @@ def sort_table(table):
     return dict(sorted_routing)
 
 def network_simulator(env, nodes):
+    start = time.time()
     for node in nodes:
         node.routing_table_new.clear()
         node.metrics_table_new.clear()
@@ -32,19 +33,21 @@ def network_simulator(env, nodes):
     destination = 27
 
     yield env.process(nodes[source].ierp(destination))
+    stop = time.time()
     print(nodes[source].paths_to_destinations)
     print(nodes[source].get_best_path_ierp(destination))
+    print(f"Elapsed time: {stop-start}")
+
     
     
-    sleep(10)
 
 # Create environment
 env = simpy.Environment()
 
 # Create nodes
 nodes = []
-zone_radius = 2
-for i in range(44):
+zone_radius = 4
+for i in range(66):
     nodes.append(Node.Node(env, i, zone_radius, position=LoadData.get_position_data(i)))
 
 # finding neighbour nodes for all nodes at time: 0
