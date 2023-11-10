@@ -28,9 +28,13 @@ def network_simulator(env, nodes):
         #print(f"Node {node.node_id} routing table: {node.routing_table}\n")
         #print(f"Node {node.node_id} metric table: {node.metrics_table}\n")
 
-    yield env.process(nodes[0].ierp(3))
-    print(nodes[0].paths_to_destinations)
-    print(nodes[0].get_best_path_ierp(0))
+    source = 2
+    destination = 27
+
+    yield env.process(nodes[source].ierp(destination))
+    print(nodes[source].paths_to_destinations)
+    print(nodes[source].get_best_path_ierp(destination))
+    
     
 
 # Create environment
