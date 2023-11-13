@@ -7,7 +7,6 @@ import distance
 import numpy as np
 import copy
 from queue import Queue
-
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import halfnorm
@@ -29,30 +28,12 @@ class Node:
         self.nodes = []
         self.paths_to_destinations = []
 
+######## IARP ########
+
     def iarp(self):
         self.generate_iarp_packet()
         yield self.env.process(self.send_packet())
-
-    def ierp(self, destination: int, packet = None):
-        if (self.routing_table.get(destination) is not None):
-            #print("Destination in zone")
-
-            if (packet == None):
-                self.paths_to_destinations.append(self.get_best_path_iarp(destination))
-                return
-
-            packet["Type"] = "Reply"
-            self.BRP_packet_queue.put(packet)
-            yield self.env.process(self.send_BRP_packet())
-        else:
-            ##print(f"Node {self.node_id} sending BRP packet to periphiral nodes")
-            self.find_periphiral_nodes()            
-            if (packet != None):
-                self.generate_BRP_packet(destination, packet)
-            else:
-                self.generate_BRP_packet(destination)
-            yield self.env.process(self.send_BRP_packet())
-
+    
     def send_packet(self):
         while (self.packet_queue.qsize() > 0):
             packet = self.packet_queue.get(0)             
@@ -136,29 +117,6 @@ class Node:
                 packet["Type"] = "ADVERTISEMENT REPLY"
                 self.packet_queue.put(packet)
 
-    def find_neighbour_nodes(self, nodes, time_index):
-        list = []
-        for node in nodes:
-            if (node is not self):
-                if (self.is_neighbour_in_LOS(time_index, node)):
-                    list.append(node)
-
-        self.neighbours = list
-
-    def set_all_nodes(self, nodes):
-        self.nodes = nodes
-
-    def compare_neighbours(self,source_list):
-        source_ids = []
-        self_neigbour_ids = []
-        for node in source_list:
-            source_ids.append(node.node_id)
-
-        for node in self.neighbours:
-            self_neigbour_ids.append(node.node_id)
-
-        return source_ids == self_neigbour_ids
-    
     def get_best_path_iarp(self, destination: int, return_packet_loss = False):
         if destination not in self.metrics_table:
             return None, None  # Key not found in metrics_table
@@ -176,6 +134,114 @@ class Node:
         index_of_min_packet_loss = expected_transmission_count.index(min_ETX)
 
         return (copy.deepcopy(self.routing_table[destination][index_of_min_packet_loss]), min_ETX) if return_packet_loss else copy.deepcopy(self.routing_table[destination][index_of_min_packet_loss])
+
+
+######## IERP ########
+
+    def ierp(self, destination: int, packet = None):
+        if (self.routing_table.get(destination) is not None):
+            #print("Destination in zone")
+
+            if (packet == None):
+                self.paths_to_destinations.append(self.get_best_path_iarp(destination))
+                return
+
+            packet["Type"] = "Reply"
+            self.BRP_packet_queue.put(packet)
+            yield self.env.process(self.send_BRP_packet())
+        else:
+            ##print(f"Node {self.node_id} sending BRP packet to periphiral nodes")
+            self.find_periphiral_nodes()            
+            if (packet != None):
+                self.generate_BRP_packet(destination, packet)
+            else:
+                self.generate_BRP_packet(destination)
+            yield self.env.process(self.send_BRP_packet())
+
+    def generate_BRP_packet(self, destination: int, currentPacket = None):
+        if (currentPacket == None):
+            for node_id in self.periphiral_nodes:
+                BRP_packet = {
+                    "Query Source Address": self.node_id,
+                    "Query Destination Address": destination,
+                    "Query ID": self.node_id,
+                    "Query Extension" : True,
+                    "Previous Bordercast Address" : self.node_id,
+                    "Path" : [self.node_id],
+                    "Periphiral nodes" : [self.node_id],
+                    "Type" : "Bordercast",
+                    "Next_node": node_id       # Periphiral node
+                }
+                self.BRP_packet_queue.put(BRP_packet)
+
+            for packet in self.BRP_packet_queue.queue:
+                for node_id in self.periphiral_nodes:
+                    packet["Periphiral nodes"].append(node_id)
+
+        else:
+            new_nodes = []
+            for peri_id in self.periphiral_nodes:
+                not_periphiral_node = True
+                for path_node_id in currentPacket["Path"]:
+                    if (not_periphiral_node == False):
+                        break
+                    for zone_node_id in self.get_all_nodes_in_zone(path_node_id):
+                        if (peri_id == zone_node_id and self.node_id != path_node_id):
+                            not_periphiral_node = False
+                            break
+                        
+                if (not_periphiral_node == True):
+                    BRP_packet = copy.deepcopy(currentPacket)
+                    BRP_packet["Query ID"] = self.node_id
+                    BRP_packet["Previous Bordercast Address"] = self.node_id
+                    BRP_packet["Next_node"] = peri_id               # Periphiral node
+                    self.BRP_packet_queue.put(BRP_packet)
+                    new_nodes.append(peri_id)
+            
+            for packet in self.BRP_packet_queue.queue:
+                for node_id in new_nodes:
+                    packet["Periphiral nodes"].append(node_id)
+
+    def send_BRP_packet(self):
+        while (self.BRP_packet_queue.qsize() > 0):
+            packet = self.BRP_packet_queue.get(0)         
+
+            if (packet["Type"] == "Bordercast"):
+                periphiral_node_id = packet["Next_node"]
+                ##print(f"Node {self.node_id} Bordercasting to {periphiral_node_id}")
+                best_path = self.get_best_path_iarp(periphiral_node_id)
+                yield self.env.process(self.find_node_by_id(best_path.pop(0)).receive_BRP_packet(packet, best_path))
+            elif (packet["Type"] == "Reply"):
+                path = packet["Path"]
+                index_dest = path.index(self.node_id) - 1       
+                destination_node = self.find_node_by_id(path[index_dest])
+                ##print(f"Node {self.node_id} sending reply to {destination_node.node_id}")
+                yield self.env.process(destination_node.receive_BRP_packet(packet))
+
+    def receive_BRP_packet(self, packet, best_path = None): 
+        if (packet["Type"] == "Bordercast"):
+            ##print(f"Node {self.node_id}: Received Bordercast")
+            if (len(best_path) > 0):  
+                yield self.env.process(self.forward_BRP_packet(best_path, packet))
+            else:
+                ##print(f"Periphiral node reached - Node: {self.node_id}")
+                packet["Path"].append(self.node_id)
+                yield self.env.process(self.ierp(packet["Query Destination Address"], packet))
+        elif (packet["Type"] == "Reply"):
+            path = packet["Path"]
+            ##print(f"Node {self.node_id}: Received Reply")
+            if(path[0] == self.node_id):
+                ##print(f"Back at origin")
+                ##print(path)
+                self.paths_to_destinations.append(path)
+                # send data along path 
+            else:
+                self.BRP_packet_queue.put(packet)
+                yield self.env.process(self.send_BRP_packet())   
+
+    def forward_BRP_packet(self, best_path, packet):
+        ##print(f"Forwarding to {best_path[0]}")
+        yield self.env.process(self.find_node_by_id(best_path.pop(0)).receive_BRP_packet(packet, best_path))
 
     def get_best_path_ierp(self, destination : int, get_full_path = False):
         paths = []
@@ -208,6 +274,43 @@ class Node:
         
         index_of_min_packet_loss = packet_loss_for_path.index(min_packet_loss)
         return (self.paths_to_destinations[index_of_min_packet_loss], paths[index_of_min_packet_loss]) if get_full_path else self.paths_to_destination[index_of_min_packet_loss]
+
+####### HELPER FUNCTIONS ########
+
+    def find_periphiral_nodes(self):
+        self.periphiral_nodes = []
+        for key, values in self.routing_table.items():
+            is_periphiral_node = True
+            for sublist in values:
+                if len(sublist) < self.zone_radius:
+                    is_periphiral_node = False
+
+            if (is_periphiral_node == True):
+                self.periphiral_nodes.append(key)
+
+
+    def find_neighbour_nodes(self, nodes, time_index):
+        list = []
+        for node in nodes:
+            if (node is not self):
+                if (self.is_neighbour_in_LOS(time_index, node)):
+                    list.append(node)
+
+        self.neighbours = list
+
+    def set_all_nodes(self, nodes):
+        self.nodes = nodes
+
+    def compare_neighbours(self,source_list):
+        source_ids = []
+        self_neigbour_ids = []
+        for node in source_list:
+            source_ids.append(node.node_id)
+
+        for node in self.neighbours:
+            self_neigbour_ids.append(node.node_id)
+
+        return source_ids == self_neigbour_ids
 
     def update_tables(self, path: list, packet_loss: list):
         path = path[1:]         # Excluding the node itself
@@ -263,102 +366,6 @@ class Node:
                 return node
         return None  # Node not found
     
-    def generate_BRP_packet(self, destination: int, currentPacket = None):
-        if (currentPacket == None):
-            for node_id in self.periphiral_nodes:
-                BRP_packet = {
-                    "Query Source Address": self.node_id,
-                    "Query Destination Address": destination,
-                    "Query ID": self.node_id,
-                    "Query Extension" : True,
-                    "Previous Bordercast Address" : self.node_id,
-                    "Path" : [self.node_id],
-                    "Periphiral nodes" : [self.node_id],
-                    "Type" : "Bordercast",
-                    "Next_node": node_id       # Periphiral node
-                }
-                self.BRP_packet_queue.put(BRP_packet)
-
-            for packet in self.BRP_packet_queue.queue:
-                for node_id in self.periphiral_nodes:
-                    packet["Periphiral nodes"].append(node_id)
-
-        else:
-            new_nodes = []
-            for peri_id in self.periphiral_nodes:
-                not_periphiral_node = True
-                for path_node_id in currentPacket["Path"]:
-                    if (not_periphiral_node == False):
-                        break
-                    for zone_node_id in self.get_all_nodes_in_zone(path_node_id):
-                        if (peri_id == zone_node_id and self.node_id != path_node_id):
-                            not_periphiral_node = False
-                            break
-                        
-                if (not_periphiral_node == True):
-                    BRP_packet = copy.deepcopy(currentPacket)
-                    BRP_packet["Query ID"] = self.node_id
-                    BRP_packet["Previous Bordercast Address"] = self.node_id
-                    BRP_packet["Next_node"] = peri_id               # Periphiral node
-                    self.BRP_packet_queue.put(BRP_packet)
-                    new_nodes.append(peri_id)
-            
-            for packet in self.BRP_packet_queue.queue:
-                for node_id in new_nodes:
-                    packet["Periphiral nodes"].append(node_id)
-
-    def find_periphiral_nodes(self):
-        self.periphiral_nodes = []
-        for key, values in self.routing_table.items():
-            is_periphiral_node = True
-            for sublist in values:
-                if len(sublist) < self.zone_radius:
-                    is_periphiral_node = False
-
-            if (is_periphiral_node == True):
-                self.periphiral_nodes.append(key)
-
-    def send_BRP_packet(self):
-        while (self.BRP_packet_queue.qsize() > 0):
-            packet = self.BRP_packet_queue.get(0)         
-
-            if (packet["Type"] == "Bordercast"):
-                periphiral_node_id = packet["Next_node"]
-                ##print(f"Node {self.node_id} Bordercasting to {periphiral_node_id}")
-                best_path = self.get_best_path_iarp(periphiral_node_id)
-                yield self.env.process(self.find_node_by_id(best_path.pop(0)).receive_BRP_packet(packet, best_path))
-            elif (packet["Type"] == "Reply"):
-                path = packet["Path"]
-                index_dest = path.index(self.node_id) - 1       
-                destination_node = self.find_node_by_id(path[index_dest])
-                ##print(f"Node {self.node_id} sending reply to {destination_node.node_id}")
-                yield self.env.process(destination_node.receive_BRP_packet(packet))
-
-    def receive_BRP_packet(self, packet, best_path = None): 
-        if (packet["Type"] == "Bordercast"):
-            ##print(f"Node {self.node_id}: Received Bordercast")
-            if (len(best_path) > 0):  
-                yield self.env.process(self.forward_BRP_packet(best_path, packet))
-            else:
-                ##print(f"Periphiral node reached - Node: {self.node_id}")
-                packet["Path"].append(self.node_id)
-                yield self.env.process(self.ierp(packet["Query Destination Address"], packet))
-        elif (packet["Type"] == "Reply"):
-            path = packet["Path"]
-            ##print(f"Node {self.node_id}: Received Reply")
-            if(path[0] == self.node_id):
-                ##print(f"Back at origin")
-                ##print(path)
-                self.paths_to_destinations.append(path)
-                # send data along path 
-            else:
-                self.BRP_packet_queue.put(packet)
-                yield self.env.process(self.send_BRP_packet())   
-
-    def forward_BRP_packet(self, best_path, packet):
-        ##print(f"Forwarding to {best_path[0]}")
-        yield self.env.process(self.find_node_by_id(best_path.pop(0)).receive_BRP_packet(packet, best_path))
-
     def send_data(self):
         skrald = 0
 
