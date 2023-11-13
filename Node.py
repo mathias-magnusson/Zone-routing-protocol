@@ -8,6 +8,10 @@ import numpy as np
 import copy
 from queue import Queue
 
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.stats import halfnorm
+
 class Node:
     def __init__(self, env, node_id: int, zone_radius: int, neighbours = None, position = None):
         self.env = env
@@ -71,6 +75,13 @@ class Node:
     def receive_packet(self, packet):
         if(packet["Type"] == "ADVERTISEMENT"):
             ##print(f"Node {self.node_id}: Received ADVERTISMENT")
+            half_normal_data = halfnorm.rvs(size=1)
+            # Apply a power transformation with a negative exponent
+            power_parameter = -3
+            transformed_data = 1 - np.exp(power_parameter * half_normal_data)
+
+            packet["Packet loss"].append(transformed_data[0])
+
             packet["Path"].append(self.node_id)       
             
             if (packet["TTL"] == 0):
@@ -88,7 +99,7 @@ class Node:
 
             if(path[0] == self.node_id):
                 ##print(f"Back at origin. Updating routing table")
-                self.update_tables(path=packet["Path"])
+                self.update_tables(packet["Path"], packet["Packet loss"])
             else:
                 self.packet_queue.put(packet)
                 yield self.env.process(self.send_packet())    
@@ -102,7 +113,8 @@ class Node:
                     "Next_node": neighbour.node_id,
                     "TTL" : self.zone_radius - 1,
                     "Path" : [self.node_id],
-                    "Packet size": 0
+                    "Packet size": 0,
+                    "Packet loss" : []
                 }
                 self.packet_queue.put(packet)
         else:
@@ -147,17 +159,27 @@ class Node:
 
         return source_ids == self_neigbour_ids
     
-    def get_best_path_iarp(self, destination: int):
+    def get_best_path_iarp(self, destination: int, return_packet_loss = False):
         if destination not in self.metrics_table:
-            return None  # Key not found in metrics_table
+            return None, None  # Key not found in metrics_table
 
-        min_hop = min(self.metrics_table[destination])          
-        best_path_index = self.metrics_table[destination].index(min_hop)
+        ## Finding index that has the smallest sum of packet_loss
+        expected_transmission_count = []       
+        for packet_loss in self.metrics_table[destination]:
+            packet_loss_sum = 1
+            for item in packet_loss:
+                packet_loss_sum = packet_loss_sum * item
+            
+            expected_transmission_count.append(1/packet_loss_sum)
 
-        return copy.deepcopy(self.routing_table[destination][best_path_index])          
+        min_ETX = min(expected_transmission_count)
+        index_of_min_packet_loss = expected_transmission_count.index(min_ETX)
 
-    def get_best_path_ierp(self, destination : int):
+        return (copy.deepcopy(self.routing_table[destination][index_of_min_packet_loss]), min_ETX) if return_packet_loss else copy.deepcopy(self.routing_table[destination][index_of_min_packet_loss])
+
+    def get_best_path_ierp(self, destination : int, get_full_path = False):
         paths = []
+        packet_loss_for_path = []
 
         for path in self.paths_to_destinations:         ## Check if the path is within the zone of the start node
             if (self.routing_table.get(destination) is not None):
@@ -167,20 +189,27 @@ class Node:
             path = path[1:]
             path.append(destination)
             full_path_list = []
+            packet_loss_sum = 0        
+
             for node_id in path:
-                path_to_destination = self.nodes[asking_node_id].get_best_path_iarp(node_id)
+                path_to_destination, packet_loss = self.nodes[asking_node_id].get_best_path_iarp(node_id, True)
                 asking_node_id = node_id
                 
                 for item in path_to_destination:
                     full_path_list.append(item)
                 
+                packet_loss_sum += packet_loss
+            
+            packet_loss_for_path.append(packet_loss_sum)
             paths.append(full_path_list)
 
-        min_length = min(len(sublist) for sublist in paths)
-        best_paths = [sublist for sublist in paths if len(sublist) == min_length]
-        return best_paths
+        # Find smallest packet_loss for entire path in all paths 
+        min_packet_loss = min(packet_loss_for_path)
+        
+        index_of_min_packet_loss = packet_loss_for_path.index(min_packet_loss)
+        return (self.paths_to_destinations[index_of_min_packet_loss], paths[index_of_min_packet_loss]) if get_full_path else self.paths_to_destination[index_of_min_packet_loss]
 
-    def update_tables(self, path: list):
+    def update_tables(self, path: list, packet_loss: list):
         path = path[1:]         # Excluding the node itself
 
         while len(path) >= 1:
@@ -195,10 +224,11 @@ class Node:
                     not_in_path = False
             
             if (not_in_path == True):
-                self.routing_table_new[destination].append(path)
-                self.metrics_table_new[destination].append(len(path))       # metrics = number of hops
+                self.routing_table_new[destination].append(path)            
+                self.metrics_table_new[destination].append(packet_loss)       # metrics = number of hops
 
             path = path[:-1]
+            packet_loss = packet_loss[:-1]
     
     def get_position_at_time(self, time_index: int):
         series_str = self.position[time_index]

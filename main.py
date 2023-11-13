@@ -29,13 +29,13 @@ def network_simulator(env, nodes):
         #print(f"Node {node.node_id} routing table: {node.routing_table}\n")
         #print(f"Node {node.node_id} metric table: {node.metrics_table}\n")
 
-    source = 2
-    destination = 27
+    source = 35
+    destination = 7
 
     yield env.process(nodes[source].ierp(destination))
     stop = time.time()
     print(nodes[source].paths_to_destinations)
-    print(nodes[source].get_best_path_ierp(destination))
+    print(nodes[source].get_best_path_ierp(destination, True))
     print(f"Elapsed time: {stop-start}")
 
 # Create environment
@@ -44,7 +44,7 @@ env = simpy.Environment()
 # Create nodes
 nodes = []
 zone_radius = 2
-for i in range(22):
+for i in range(66):
     nodes.append(Node.Node(env, i, zone_radius, position=LoadData.get_position_data(i)))
 
 # finding neighbour nodes for all nodes at time: 0
