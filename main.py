@@ -26,11 +26,11 @@ def network_simulator(env, nodes):
         node.routing_table = sort_table(node.routing_table)
         node.metrics_table = sort_table(node.metrics_table)
 
-        #print(f"Node {node.node_id} routing table: {node.routing_table}\n")
-        #print(f"Node {node.node_id} metric table: {node.metrics_table}\n")
+        print(f"Node {node.node_id} routing table: {node.routing_table}\n")
+        print(f"Node {node.node_id} metric table: {node.metrics_table}\n")
 
-    source = 35
-    destination = 7
+    source = 0
+    destination = 3
 
     yield env.process(nodes[source].ierp(destination))
     stop = time.time()

@@ -255,7 +255,7 @@ class Node:
             path = path[1:]
             path.append(destination)
             full_path_list = []
-            packet_loss_sum = 0        
+            packet_loss_sum = 1        
 
             for node_id in path:
                 path_to_destination, packet_loss = self.nodes[asking_node_id].get_best_path_iarp(node_id, True)
@@ -264,7 +264,7 @@ class Node:
                 for item in path_to_destination:
                     full_path_list.append(item)
                 
-                packet_loss_sum += packet_loss
+                packet_loss_sum *= packet_loss
             
             packet_loss_for_path.append(packet_loss_sum)
             paths.append(full_path_list)
