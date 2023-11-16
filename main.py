@@ -20,6 +20,7 @@ def network_simulator(env, nodes):
     for node in nodes:
         node.routing_table_new.clear()
         node.metrics_table_new.clear()
+        node.paths_to_destinations.clear()
         yield env.process(node.iarp())
         node.routing_table = node.routing_table_new
         node.metrics_table = node.metrics_table_new
@@ -30,13 +31,13 @@ def network_simulator(env, nodes):
         #print(f"Node {node.node_id} routing table: {node.routing_table}\n")
         #print(f"Node {node.node_id} metric table: {node.metrics_table}\n")
 
-    source = 2
-    destination = 27
+    source = 0
+    destination = 3
 
     yield env.process(nodes[source].ierp(destination))
     stop = env.now
     print(nodes[source].paths_to_destinations)
-    print(nodes[source].get_best_path_ierp(destination))
+    print(nodes[source].get_best_path_ierp(destination, True))
     print(f"Elapsed time: {stop-start}")
 
 # Create environment
@@ -53,7 +54,7 @@ find_node_neighbours(nodes, 0)
 
 # Run the simulation
 env.process(network_simulator(env,nodes))
-env.run(until=20)
+env.run()
 
 
 ### Run every sample

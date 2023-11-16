@@ -152,7 +152,7 @@ class Node:
             self.BRP_packet_queue.put(packet)
             yield self.env.process(self.send_BRP_packet())
         else:
-            ##print(f"Node {self.node_id} sending BRP packet to periphiral nodes")
+            ##print(f"Node {self.node_id} sending BRP packet to peripheral nodes")
             self.find_periphiral_nodes()            
             if (packet != None):
                 self.generate_BRP_packet(destination, packet)
@@ -218,7 +218,8 @@ class Node:
                 path = packet["Path"]
                 index_dest = path.index(self.node_id) - 1       
                 destination_node = self.find_node_by_id(path[index_dest])
-                ##print(f"Node {self.node_id} sending reply to {destination_node.node_id}")
+                ##print(f"Node {self.node_id} sending reply to
+                # {destination_node.node_id}")
                 yield self.env.process(destination_node.receive_BRP_packet(packet))
 
     def receive_BRP_packet(self, packet, best_path = None): 
@@ -278,7 +279,7 @@ class Node:
         min_packet_loss = min(packet_loss_for_path)
         
         index_of_min_packet_loss = packet_loss_for_path.index(min_packet_loss)
-        return (self.paths_to_destinations[index_of_min_packet_loss], paths[index_of_min_packet_loss]) if get_full_path else self.paths_to_destination[index_of_min_packet_loss]
+        return (self.paths_to_destinations[index_of_min_packet_loss], paths[index_of_min_packet_loss]) if get_full_path else self.paths_to_destinations[index_of_min_packet_loss]
 
 ####### HELPER FUNCTIONS ########
 
