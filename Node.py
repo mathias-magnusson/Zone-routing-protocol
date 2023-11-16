@@ -36,6 +36,7 @@ class Node:
     
     def send_packet(self):
         while (self.packet_queue.qsize() > 0):
+            yield self.env.timeout(0.1)
             packet = self.packet_queue.get(0)             
             packet_type = packet["Type"]
             next_node_string = packet["Next_node"]
@@ -54,6 +55,7 @@ class Node:
                 print("I don't know this packet type")
 
     def receive_packet(self, packet):
+        yield self.env.timeout(0.1)
         if(packet["Type"] == "ADVERTISEMENT"):
             ##print(f"Node {self.node_id}: Received ADVERTISMENT")
             half_normal_data = halfnorm.rvs(size=1)
@@ -204,6 +206,7 @@ class Node:
 
     def send_BRP_packet(self):
         while (self.BRP_packet_queue.qsize() > 0):
+            yield self.env.timeout(0.1)
             packet = self.BRP_packet_queue.get(0)         
 
             if (packet["Type"] == "Bordercast"):
@@ -219,6 +222,7 @@ class Node:
                 yield self.env.process(destination_node.receive_BRP_packet(packet))
 
     def receive_BRP_packet(self, packet, best_path = None): 
+        yield self.env.timeout(0.1)
         if (packet["Type"] == "Bordercast"):
             ##print(f"Node {self.node_id}: Received Bordercast")
             if (len(best_path) > 0):  
@@ -241,6 +245,7 @@ class Node:
 
     def forward_BRP_packet(self, best_path, packet):
         ##print(f"Forwarding to {best_path[0]}")
+        yield self.env.timeout(0.1)
         yield self.env.process(self.find_node_by_id(best_path.pop(0)).receive_BRP_packet(packet, best_path))
 
     def get_best_path_ierp(self, destination : int, get_full_path = False):
