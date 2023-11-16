@@ -51,7 +51,7 @@ def network_simulator(env, nodes):
         #    print(f"{key}: {value}")
 
 # Create environment
-env = simpy.rt.RealtimeEnvironment(factor=0.1)
+env = simpy.Environment()
 
 # Create nodes
 nodes = []
