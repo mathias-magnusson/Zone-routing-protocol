@@ -16,6 +16,7 @@ def sort_table(table):
 
 def network_simulator(env, nodes):
     start = env.now
+
     for node in nodes:
         node.routing_table_new.clear()
         node.metrics_table_new.clear()
@@ -29,24 +30,21 @@ def network_simulator(env, nodes):
         #print(f"Node {node.node_id} routing table: {node.routing_table}\n")
         #print(f"Node {node.node_id} metric table: {node.metrics_table}\n")
 
-    stop = env.now
-    source = 0
-    destination = 3
+    source = 2
+    destination = 27
 
     yield env.process(nodes[source].ierp(destination))
-    
-    print(f"Source node: {source}")
-    print(f"Destinstion node: {destination}")
-    #print(nodes[source].paths_to_destinations)
-    #print(nodes[source].get_best_path_ierp(destination, True))
+    stop = env.now
+    print(nodes[source].paths_to_destinations)
+    print(nodes[source].get_best_path_ierp(destination))
     print(f"Elapsed time: {stop-start}")
 
 # Create environment
-env = simpy.Environment()
+env = simpy.rt.RealtimeEnvironment(factor=0.1)
 
 # Create nodes
 nodes = []
-zone_radius = 3
+zone_radius = 2
 for i in range(22):
     nodes.append(Node.Node(env, i, zone_radius, position=LoadData.get_position_data(i)))
 
@@ -55,8 +53,7 @@ find_node_neighbours(nodes, 0)
 
 # Run the simulation
 env.process(network_simulator(env,nodes))
-env.run()
-
+env.run(until=20)
 
 
 ### Run every sample
