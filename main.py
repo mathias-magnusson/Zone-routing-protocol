@@ -15,12 +15,12 @@ def sort_table(table):
     return dict(sorted_routing)
 
 
-run_time = 2
+run_time = 8
 sample_time = 1
 
 def network_simulator(env, nodes):
     for i in range(run_time):
-        find_node_neighbours(nodes, i*20)
+        find_node_neighbours(nodes, 0)
 
         start = env.now
 
@@ -43,9 +43,12 @@ def network_simulator(env, nodes):
 
         yield env.process(nodes[source].ierp(destination))
         stop = env.now
-        print(nodes[source].paths_to_destinations)
-        print(nodes[source].get_best_path_ierp(destination, True))
-        print(f"Elapsed time: {stop-start}")
+        #print(nodes[source].paths_to_destinations)
+        peri_path, full_path, ETX_path = nodes[source].get_best_path_ierp(destination)
+        print(f"Best path: {full_path}   -   ETX: {ETX_path}")
+
+        #print(nodes[source].get_best_path_ierp(destination))
+        #print(f"Elapsed time: {stop-start}")
 
         #for key, value in nodes[0].routing_table.items():
         #    print(f"{key}: {value}")
