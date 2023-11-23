@@ -126,17 +126,19 @@ class Node:
         ## Finding index that has the smallest sum of packet_loss
         expected_transmission_count = []       
         for packet_loss in self.metrics_table[destination]:
-            packet_loss_sum = 1
+            packet_loss_sum = 0
             for item in packet_loss:
-                packet_loss_sum = packet_loss_sum * item
+                packet_loss_sum = packet_loss_sum + 1/(item**2)
             
-            expected_transmission_count.append(1/packet_loss_sum)
+            expected_transmission_count.append(packet_loss_sum)
 
         min_ETX = min(expected_transmission_count)
         index_of_min_packet_loss = expected_transmission_count.index(min_ETX)
 
-        return (copy.deepcopy(self.routing_table[destination][index_of_min_packet_loss]), min_ETX) if return_packet_loss else copy.deepcopy(self.routing_table[destination][index_of_min_packet_loss])
-
+        if (return_packet_loss == True):
+            return (copy.deepcopy(self.routing_table[destination][index_of_min_packet_loss]), min_ETX)
+        else:
+            return copy.deepcopy(self.routing_table[destination][index_of_min_packet_loss])
 
 ######## IERP ########
 
@@ -237,9 +239,8 @@ class Node:
             ##print(f"Node {self.node_id}: Received Reply")
             if(path[0] == self.node_id):
                 ##print(f"Back at origin")
-                ##print(path)
+                path.append(packet["Query Destination Address"])  # Add destination to path
                 self.paths_to_destinations.append(path)
-                # send data along path 
             else:
                 self.BRP_packet_queue.put(packet)
                 yield self.env.process(self.send_BRP_packet())   
@@ -249,7 +250,7 @@ class Node:
         yield self.env.timeout(0.1)
         yield self.env.process(self.find_node_by_id(best_path.pop(0)).receive_BRP_packet(packet, best_path))
 
-    def get_best_path_ierp(self, destination : int, get_full_path = False):
+    def get_best_path_ierp(self, destination : int):
         paths = []
         packet_loss_for_path = []
 
@@ -259,9 +260,8 @@ class Node:
 
             asking_node_id = path[0]
             path = path[1:]
-            path.append(destination)
-            full_path_list = []
-            packet_loss_sum = 1        
+            full_path_list = [self.node_id]
+            packet_loss_sum = 0        
 
             for node_id in path:
                 path_to_destination, packet_loss = self.nodes[asking_node_id].get_best_path_iarp(node_id, True)
@@ -270,16 +270,17 @@ class Node:
                 for item in path_to_destination:
                     full_path_list.append(item)
                 
-                packet_loss_sum *= packet_loss
+                packet_loss_sum += packet_loss
             
             packet_loss_for_path.append(packet_loss_sum)
             paths.append(full_path_list)
 
         # Find smallest packet_loss for entire path in all paths 
         min_packet_loss = min(packet_loss_for_path)
-        
         index_of_min_packet_loss = packet_loss_for_path.index(min_packet_loss)
-        return (self.paths_to_destinations[index_of_min_packet_loss], paths[index_of_min_packet_loss]) if get_full_path else self.paths_to_destinations[index_of_min_packet_loss]
+        # Returning both periphiral path and full path
+        return (self.paths_to_destinations[index_of_min_packet_loss], paths[index_of_min_packet_loss], min_packet_loss)
+
 
 ####### HELPER FUNCTIONS ########
 
