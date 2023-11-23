@@ -16,7 +16,7 @@ def sort_table(table):
     return dict(sorted_routing)
 
 
-run_time = 380
+run_time = 200
 sample_time = 1
 
 def network_simulator(env, nodes):
@@ -62,8 +62,8 @@ def network_simulator(env, nodes):
 
         # Write to data
         data[0].append(i)
-        data[1].append(stop-start) #zone = 2
-    with open('/Users/mathiasmagnusson/Zone-routing-protocol/iarp-test-1.csv', 'w', newline='') as csvfile:
+        data[1].append(stop-start)
+    with open('/Users/mathiasmagnusson/Zone-routing-protocol/iarp-test-5.csv', 'w', newline='') as csvfile:
         csvwriter = csv.writer(csvfile)
         csvwriter.writerows(data)
 
@@ -72,7 +72,7 @@ env = simpy.Environment()
 
 # Create nodes
 nodes = []
-zone_radius = 1
+zone_radius = 5
 for i in range(66):
     nodes.append(Node.Node(env, i, zone_radius, position=LoadData.get_position_data(i)))
 
