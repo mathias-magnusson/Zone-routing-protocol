@@ -14,14 +14,12 @@ def sort_table(table):
     sorted_routing = sorted(table.items())
     return dict(sorted_routing)
 
-
-run_time = 8
+run_time = 120
 sample_time = 1
 
 def network_simulator(env, nodes):
     for i in range(run_time):
-        find_node_neighbours(nodes, 0)
-
+        find_node_neighbours(nodes, i)
         start = env.now
 
         for node in nodes:
