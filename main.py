@@ -42,6 +42,7 @@ def network_simulator(env, nodes):
             node.metrics_table = sort_table(node.metrics_table)
             packet_count = packet_count + node.packet_count
             print(f"Node {node.node_id} processed. Packet count: {packet_count}")
+            
         # nodes[0].routing_table_new.clear()
         # nodes[0].metrics_table_new.clear()
         # nodes[0].paths_to_destinations.clear()
