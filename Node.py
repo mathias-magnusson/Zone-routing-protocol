@@ -58,12 +58,6 @@ class Node:
         yield self.env.timeout(0.1)
         if(packet["Type"] == "ADVERTISEMENT"):
             ##print(f"Node {self.node_id}: Received ADVERTISMENT")
-            half_normal_data = halfnorm.rvs(size=1)
-            # Apply a power transformation with a negative exponent
-            power_parameter = -3
-            transformed_data = 1 - np.exp(power_parameter * half_normal_data)
-
-            packet["Packet loss"].append(transformed_data[0])
 
             packet["Path"].append(self.node_id)       
             
@@ -78,6 +72,14 @@ class Node:
                 
         elif(packet["Type"] == "ADVERTISEMENT REPLY"):
             ##print(f"Node with id {self.node_id}: Received ADVERTISEMENT REPLY")
+            
+            half_normal_data = halfnorm.rvs(size=1)
+            # Apply a power transformation with a negative exponent
+            power_parameter = -3
+            transformed_data = 1 - np.exp(power_parameter * half_normal_data)
+
+            packet["Packet loss"].append(transformed_data[0])
+
             path = packet["Path"]
 
             if(path[0] == self.node_id):
