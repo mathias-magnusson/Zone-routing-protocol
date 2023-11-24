@@ -27,6 +27,7 @@ class Node:
         self.position = position
         self.nodes = []
         self.paths_to_destinations = []
+        self.packet_count = 0
 
 ######## IARP ########
 
@@ -37,7 +38,7 @@ class Node:
     def send_packet(self):
         while (self.packet_queue.qsize() > 0):
             yield self.env.timeout(0.1)
-            packet = self.packet_queue.get(0)             
+            packet = self.packet_queue.get(0)          
             packet_type = packet["Type"]
             next_node_string = packet["Next_node"]
 
@@ -55,6 +56,7 @@ class Node:
                 print("I don't know this packet type")
 
     def receive_packet(self, packet):
+        self.packet_count += 1
         yield self.env.timeout(0.1)
         if(packet["Type"] == "ADVERTISEMENT"):
             ##print(f"Node {self.node_id}: Received ADVERTISMENT")
