@@ -33,23 +33,13 @@ def network_simulator(env, nodes):
             node.routing_table = sort_table(node.routing_table)
             node.metrics_table = sort_table(node.metrics_table)
 
-            #print(f"Node {node.node_id} routing table: {node.routing_table}\n")
-            #print(f"Node {node.node_id} metric table: {node.metrics_table}\n")
-
         source = 0
         destination = 3
 
-        yield env.process(nodes[source].ierp(destination))
+        yield env.process(nodes[source].send_data(destination))
         stop = env.now
-        #print(nodes[source].paths_to_destinations)
-        peri_path, full_path, ETX_path = nodes[source].get_best_path_ierp(destination)
+        full_path, ETX_path = nodes[source].get_best_path_ierp(destination)
         print(f"Best path: {full_path}   -   ETX: {ETX_path}")
-
-        #print(nodes[source].get_best_path_ierp(destination))
-        #print(f"Elapsed time: {stop-start}")
-
-        #for key, value in nodes[0].routing_table.items():
-        #    print(f"{key}: {value}")
 
 # Create environment
 env = simpy.Environment()

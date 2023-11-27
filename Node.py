@@ -28,6 +28,13 @@ class Node:
         self.nodes = []
         self.paths_to_destinations = []
 
+
+    def send_data(self, destination : int):
+        if (self.routing_table.get(destination) is not None):
+            self.paths_to_destinations.append(self.get_best_path_iarp(destination))
+        else:
+            yield self.env.process(self.ierp(destination))
+
 ######## IARP ########
 
     def iarp(self):
@@ -40,7 +47,7 @@ class Node:
             packet = self.packet_queue.get(0)             
 
             if(packet["Type"] == "ADVERTISEMENT"):
-                next_node = self.find_node_by_id(packet["Next_node"])
+                next_node = self.find_node_by_id(packet["Next node"])
                 yield self.env.process(next_node.receive_packet(packet))
             elif(packet["Type"] == "ADVERTISEMENT REPLY"):
                 path = packet["Path"]
@@ -79,7 +86,7 @@ class Node:
                 packet = {
                     "Type": "ADVERTISEMENT",
                     "Node Id": self.node_id,
-                    "Next_node": neighbour.node_id,
+                    "Next node": neighbour.node_id,
                     "TTL" : self.zone_radius - 1,
                     "Path" : [self.node_id],
                     "Packet loss" : []
@@ -94,12 +101,12 @@ class Node:
                         
                 if (node_not_in_path == True):
                     packet = copy.deepcopy(currentPacket)
-                    packet["Next_node"] = neighbour.node_id
+                    packet["Next node"] = neighbour.node_id
                     self.packet_queue.put(packet)
 
             if (self.packet_queue.qsize() == 0):           # If no packet is appended a reply should be sent - fx when no neighbours and a full path isn't found
                 packet = copy.deepcopy(currentPacket)
-                packet["Next_node"] = neighbour.node_id
+                packet["Next node"] = neighbour.node_id
                 packet["TTL"] = 0
                 packet["Type"] = "ADVERTISEMENT REPLY"
                 self.packet_queue.put(packet)
@@ -129,11 +136,6 @@ class Node:
 
     def ierp(self, destination: int, packet = None):
         if (self.routing_table.get(destination) is not None):
-
-            if (packet == None):
-                self.paths_to_destinations.append(self.get_best_path_iarp(destination))
-                return
-
             packet["Type"] = "Reply"
             self.BRP_packet_queue.put(packet)
             yield self.env.process(self.send_BRP_packet())
@@ -149,21 +151,12 @@ class Node:
         if (currentPacket == None):
             for node_id in self.periphiral_nodes:
                 BRP_packet = {
-                    "Query Source Address": self.node_id,
-                    "Query Destination Address": destination,
-                    "Query ID": self.node_id,
-                    "Query Extension" : True,
-                    "Previous Bordercast Address" : self.node_id,
+                    "Destination": destination,
                     "Path" : [self.node_id],
-                    "Periphiral nodes" : [self.node_id],
                     "Type" : "Bordercast",
-                    "Next_node": node_id       # Periphiral node
+                    "Next node": node_id
                 }
                 self.BRP_packet_queue.put(BRP_packet)
-
-            for packet in self.BRP_packet_queue.queue:
-                for node_id in self.periphiral_nodes:
-                    packet["Periphiral nodes"].append(node_id)
 
         else:
             new_nodes = []
@@ -179,15 +172,9 @@ class Node:
                         
                 if (not_periphiral_node == True):
                     BRP_packet = copy.deepcopy(currentPacket)
-                    BRP_packet["Query ID"] = self.node_id
-                    BRP_packet["Previous Bordercast Address"] = self.node_id
-                    BRP_packet["Next_node"] = peri_id               # Periphiral node
+                    BRP_packet["Next node"] = peri_id
                     self.BRP_packet_queue.put(BRP_packet)
                     new_nodes.append(peri_id)
-            
-            for packet in self.BRP_packet_queue.queue:
-                for node_id in new_nodes:
-                    packet["Periphiral nodes"].append(node_id)
 
     def send_BRP_packet(self):
         while (self.BRP_packet_queue.qsize() > 0):
@@ -195,7 +182,7 @@ class Node:
             packet = self.BRP_packet_queue.get(0)         
 
             if (packet["Type"] == "Bordercast"):
-                periphiral_node_id = packet["Next_node"]
+                periphiral_node_id = packet["Next node"]
                 best_path = self.get_best_path_iarp(periphiral_node_id)
                 yield self.env.process(self.find_node_by_id(best_path.pop(0)).receive_BRP_packet(packet, best_path))
             elif (packet["Type"] == "Reply"):
@@ -211,11 +198,11 @@ class Node:
                 yield self.env.process(self.forward_BRP_packet(best_path, packet))
             else:
                 packet["Path"].append(self.node_id)
-                yield self.env.process(self.ierp(packet["Query Destination Address"], packet))
+                yield self.env.process(self.ierp(packet["Destination"], packet))
         elif (packet["Type"] == "Reply"):
             path = packet["Path"]
             if(path[0] == self.node_id):
-                path.append(packet["Query Destination Address"])  # Add destination to path
+                path.append(packet["Destination"])  # Add destination to path
                 self.paths_to_destinations.append(path)
             else:
                 self.BRP_packet_queue.put(packet)
@@ -229,10 +216,12 @@ class Node:
         paths = []
         packet_loss_for_path = []
 
-        for path in self.paths_to_destinations:         ## Check if the path is within the zone of the start node
-            if (self.routing_table.get(destination) is not None):
-                return path
+        if (self.routing_table.get(destination) is not None):           ## Check if the path is within the zone of the start node       
+            path, loss = self.get_best_path_iarp(destination, True)
+            path = [self.node_id] + path
+            return path, loss
 
+        for path in self.paths_to_destinations:              
             asking_node_id = path[0]
             path = path[1:]
             full_path_list = [self.node_id]
@@ -254,7 +243,7 @@ class Node:
         min_packet_loss = min(packet_loss_for_path)
         index_of_min_packet_loss = packet_loss_for_path.index(min_packet_loss)
         # Returning both periphiral path and full path
-        return (self.paths_to_destinations[index_of_min_packet_loss], paths[index_of_min_packet_loss], min_packet_loss)
+        return (paths[index_of_min_packet_loss], min_packet_loss)
 
 
 ####### HELPER FUNCTIONS ########
@@ -269,7 +258,6 @@ class Node:
 
             if (is_periphiral_node == True):
                 self.periphiral_nodes.append(key)
-
 
     def find_neighbour_nodes(self, nodes, time_index):
         list = []
@@ -348,9 +336,6 @@ class Node:
                 return node
         return None  # Node not found
     
-    def send_data(self):
-        skrald = 0
-
     def get_all_nodes_in_zone(self, node_id):
         node = self.find_node_by_id(node_id)
         all_zone_nodes = []
