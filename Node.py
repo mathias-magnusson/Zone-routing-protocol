@@ -38,18 +38,14 @@ class Node:
         while (self.packet_queue.qsize() > 0):
             yield self.env.timeout(0.1)
             packet = self.packet_queue.get(0)             
-            packet_type = packet["Type"]
-            next_node_string = packet["Next_node"]
 
             if(packet["Type"] == "ADVERTISEMENT"):
-                ##print(f"Node {self.node_id} sending {packet_type} to Node {next_node_string}")
                 next_node = self.find_node_by_id(packet["Next_node"])
                 yield self.env.process(next_node.receive_packet(packet))
             elif(packet["Type"] == "ADVERTISEMENT REPLY"):
                 path = packet["Path"]
                 index_dest = path.index(self.node_id) - 1
                 destination_node = self.find_node_by_id(path[index_dest])
-                ##print(f"Node {self.node_id} sending {packet_type} to Node {destination_node.node_id}")
                 yield self.env.process(destination_node.receive_packet(packet))
             else:
                 print("I don't know this packet type")
@@ -57,8 +53,6 @@ class Node:
     def receive_packet(self, packet):
         yield self.env.timeout(0.1)
         if(packet["Type"] == "ADVERTISEMENT"):
-            ##print(f"Node {self.node_id}: Received ADVERTISMENT")
-
             packet["Path"].append(self.node_id)       
             
             if (packet["TTL"] == 0):
@@ -71,19 +65,9 @@ class Node:
                 yield self.env.process(self.send_packet())
                 
         elif(packet["Type"] == "ADVERTISEMENT REPLY"):
-            ##print(f"Node with id {self.node_id}: Received ADVERTISEMENT REPLY")
-            
-            half_normal_data = halfnorm.rvs(size=1)
-            # Apply a power transformation with a negative exponent
-            power_parameter = -3
-            transformed_data = 1 - np.exp(power_parameter * half_normal_data)
+            packet["Packet loss"].append(self.get_random_value())
 
-            packet["Packet loss"].append(transformed_data[0])
-
-            path = packet["Path"]
-
-            if(path[0] == self.node_id):
-                ##print(f"Back at origin. Updating routing table")
+            if(packet["Path"][0] == self.node_id):
                 self.update_tables(packet["Path"], packet["Packet loss"])
             else:
                 self.packet_queue.put(packet)
@@ -98,7 +82,6 @@ class Node:
                     "Next_node": neighbour.node_id,
                     "TTL" : self.zone_radius - 1,
                     "Path" : [self.node_id],
-                    "Packet size": 0,
                     "Packet loss" : []
                 }
                 self.packet_queue.put(packet)
@@ -146,7 +129,6 @@ class Node:
 
     def ierp(self, destination: int, packet = None):
         if (self.routing_table.get(destination) is not None):
-            #print("Destination in zone")
 
             if (packet == None):
                 self.paths_to_destinations.append(self.get_best_path_iarp(destination))
@@ -156,7 +138,6 @@ class Node:
             self.BRP_packet_queue.put(packet)
             yield self.env.process(self.send_BRP_packet())
         else:
-            ##print(f"Node {self.node_id} sending BRP packet to peripheral nodes")
             self.find_periphiral_nodes()            
             if (packet != None):
                 self.generate_BRP_packet(destination, packet)
@@ -215,32 +196,25 @@ class Node:
 
             if (packet["Type"] == "Bordercast"):
                 periphiral_node_id = packet["Next_node"]
-                ##print(f"Node {self.node_id} Bordercasting to {periphiral_node_id}")
                 best_path = self.get_best_path_iarp(periphiral_node_id)
                 yield self.env.process(self.find_node_by_id(best_path.pop(0)).receive_BRP_packet(packet, best_path))
             elif (packet["Type"] == "Reply"):
                 path = packet["Path"]
                 index_dest = path.index(self.node_id) - 1       
                 destination_node = self.find_node_by_id(path[index_dest])
-                ##print(f"Node {self.node_id} sending reply to
-                # {destination_node.node_id}")
                 yield self.env.process(destination_node.receive_BRP_packet(packet))
 
     def receive_BRP_packet(self, packet, best_path = None): 
         yield self.env.timeout(0.1)
         if (packet["Type"] == "Bordercast"):
-            ##print(f"Node {self.node_id}: Received Bordercast")
             if (len(best_path) > 0):  
                 yield self.env.process(self.forward_BRP_packet(best_path, packet))
             else:
-                ##print(f"Periphiral node reached - Node: {self.node_id}")
                 packet["Path"].append(self.node_id)
                 yield self.env.process(self.ierp(packet["Query Destination Address"], packet))
         elif (packet["Type"] == "Reply"):
             path = packet["Path"]
-            ##print(f"Node {self.node_id}: Received Reply")
             if(path[0] == self.node_id):
-                ##print(f"Back at origin")
                 path.append(packet["Query Destination Address"])  # Add destination to path
                 self.paths_to_destinations.append(path)
             else:
@@ -248,7 +222,6 @@ class Node:
                 yield self.env.process(self.send_BRP_packet())   
 
     def forward_BRP_packet(self, best_path, packet):
-        ##print(f"Forwarding to {best_path[0]}")
         yield self.env.timeout(0.1)
         yield self.env.process(self.find_node_by_id(best_path.pop(0)).receive_BRP_packet(packet, best_path))
 
@@ -390,3 +363,11 @@ class Node:
             all_zone_nodes.append(peri_node)
 
         return all_zone_nodes
+    
+    def get_random_value(self):
+        half_normal_data = halfnorm.rvs(size=1)
+        # Apply a power transformation with a negative exponent
+        power_parameter = -3
+        transformed_data = 1 - np.exp(power_parameter * half_normal_data)
+
+        return transformed_data[0]
