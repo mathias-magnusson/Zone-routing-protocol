@@ -1,14 +1,9 @@
-import simpy
-import random
 from tabulate import tabulate
-import LoadData
 from math import acos, sin, cos
 import distance
 import numpy as np
 import copy
 from queue import Queue
-import numpy as np
-import matplotlib.pyplot as plt
 from scipy.stats import halfnorm
 
 class Node:
@@ -28,6 +23,7 @@ class Node:
         self.nodes = []
         self.paths_to_destinations = []
         self.packet_count = 0
+        self.packet_count_ierp = 0
 
 
     def send_data(self, destination : int):
@@ -195,6 +191,8 @@ class Node:
 
     def receive_BRP_packet(self, packet, best_path = None): 
         yield self.env.timeout(0.1)
+        self.packet_count_ierp += 1     
+
         if (packet["Type"] == "Bordercast"):
             if (len(best_path) > 0):  
                 yield self.env.process(self.forward_BRP_packet(best_path, packet))
