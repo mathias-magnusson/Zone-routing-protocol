@@ -15,8 +15,7 @@ def sort_table(table):
     sorted_routing = sorted(table.items())
     return dict(sorted_routing)
 
-
-run_time = 1
+run_time = 120
 sample_time = 1
 
 def network_simulator(env, nodes):
@@ -24,9 +23,7 @@ def network_simulator(env, nodes):
 
     data = [[],[]]
     for i in range(run_time):
-        print("Finding neighbours")
         find_node_neighbours(nodes, i)
-
         start = env.now
         packet_count = 0
         for node in nodes:
@@ -51,19 +48,13 @@ def network_simulator(env, nodes):
         # nodes[0].routing_table = nodes[0].routing_table_new
         # nodes[0].metrics_table = nodes[0].metrics_table_new
 
-        # nodes[0].routing_table = sort_table(nodes[0].routing_table)
-        # nodes[0].metrics_table = sort_table(nodes[0].metrics_table)
-        # packet_count = packet_count + nodes[0].packet_count
+        source = 0
+        destination = 3
 
-        # Write to data
-        data[0].append(i)
-        data[1].append(packet_count)
-        print(f"Packet count at T = {i}: {packet_count}")
-
-    # print(f"Writing data: {data} to file")
-    # with open('/Users/mathiasmagnusson/Zone-routing-protocol/Data-out/iarp-test-num18-p1.csv', 'w', newline='') as csvfile:
-    #     csvwriter = csv.writer(csvfile)
-    #     csvwriter.writerows(data)
+        yield env.process(nodes[source].send_data(destination))
+        stop = env.now
+        full_path, ETX_path = nodes[source].get_best_path_ierp(destination)
+        print(f"Best path: {full_path}   -   ETX: {ETX_path}")
 
 # Create environment
 env = simpy.Environment()
