@@ -22,7 +22,7 @@ class Node:
         self.position = position
         self.nodes = []
         self.paths_to_destinations = []
-        self.packet_count = 0
+        self.packet_count_iarp = 0
         self.packet_count_ierp = 0
 
 
@@ -55,7 +55,7 @@ class Node:
                 print("I don't know this packet type")
 
     def receive_packet(self, packet):
-        self.packet_count += 1
+        self.packet_count_iarp += 1
         yield self.env.timeout(0.1)
         if(packet["Type"] == "ADVERTISEMENT"):
             packet["Path"].append(self.node_id)       
@@ -325,7 +325,7 @@ class Node:
         neighbour_lat = neighbour_coordinates[0]
         neighbour_lon = neighbour_coordinates[1]
 
-        if (distance.distance(self_lat, self_lon, neighbour_lat, neighbour_lon) < 6000):
+        if (distance.distance(self_lat, self_lon, neighbour_lat, neighbour_lon) < 6050):
             return True
         
         return False
