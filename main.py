@@ -1,9 +1,8 @@
 import numpy as np
-import sys
 import simpy
+import sys
 import Node
 import LoadData
-import time
 
 def find_node_neighbours(nodes: [], index : int):
     for node in nodes:
@@ -14,13 +13,17 @@ def sort_table(table):
     sorted_routing = sorted(table.items())
     return dict(sorted_routing)
 
-run_time = 120
+run_time = 1
 sample_time = 1
 
 def network_simulator(env, nodes):
     for i in range(run_time):
+        np.random.seed(41)
+
         find_node_neighbours(nodes, i)
         start = env.now
+        packet_count = 0
+        packet_count_IERP = 0
 
         for node in nodes:
             node.routing_table_new.clear()
@@ -33,13 +36,26 @@ def network_simulator(env, nodes):
             node.routing_table = sort_table(node.routing_table)
             node.metrics_table = sort_table(node.metrics_table)
 
-        source = 0
-        destination = 3
+            for n in nodes:
+                packet_count = packet_count + n.packet_count_iarp
+                n.packet_count_iarp = 0
+            
+            print(f"Node {node.node_id} processed - Packet count: {packet_count}")
+            
+        print(f"Packet count iarp: {packet_count}")
+
+        source = 3
+        destination = 9
 
         yield env.process(nodes[source].send_data(destination))
         stop = env.now
         full_path, ETX_path = nodes[source].get_best_path_ierp(destination)
         print(f"Best path: {full_path}   -   ETX: {ETX_path}")
+
+        for n in nodes:
+            packet_count_IERP = packet_count_IERP + n.packet_count_ierp
+        
+        print(f"Packet count ierp: {packet_count_IERP}")
 
 # Create environment
 env = simpy.Environment()

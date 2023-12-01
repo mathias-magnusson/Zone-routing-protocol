@@ -1,14 +1,10 @@
-import simpy
-import random
 from tabulate import tabulate
-import LoadData
 from math import acos, sin, cos
 import distance
 import numpy as np
 import copy
 from queue import Queue
 import numpy as np
-import matplotlib.pyplot as plt
 from scipy.stats import halfnorm
 
 class Node:
@@ -27,7 +23,8 @@ class Node:
         self.position = position
         self.nodes = []
         self.paths_to_destinations = []
-
+        self.packet_count_iarp = 0
+        self.packet_count_ierp = 0
 
     def send_data(self, destination : int):
         if (self.routing_table.get(destination) is not None):
@@ -59,6 +56,8 @@ class Node:
 
     def receive_packet(self, packet):
         yield self.env.timeout(0.1)
+        self.packet_count_iarp += 1
+
         if(packet["Type"] == "ADVERTISEMENT"):
             packet["Path"].append(self.node_id)       
             
@@ -159,7 +158,6 @@ class Node:
                 self.BRP_packet_queue.put(BRP_packet)
 
         else:
-            new_nodes = []
             for peri_id in self.periphiral_nodes:
                 not_periphiral_node = True
                 for path_node_id in currentPacket["Path"]:
@@ -174,7 +172,11 @@ class Node:
                     BRP_packet = copy.deepcopy(currentPacket)
                     BRP_packet["Next node"] = peri_id
                     self.BRP_packet_queue.put(BRP_packet)
-                    new_nodes.append(peri_id)
+
+            if (self.BRP_packet_queue.qsize() == 0):           # If no packet is appended a reply should be sent - fx when no neighbours and a full path isn't found
+                BRP_packet = copy.deepcopy(currentPacket)
+                BRP_packet["Type"] = "Reply"
+                self.BRP_packet_queue.put(BRP_packet)
 
     def send_BRP_packet(self):
         while (self.BRP_packet_queue.qsize() > 0):
@@ -193,6 +195,8 @@ class Node:
 
     def receive_BRP_packet(self, packet, best_path = None): 
         yield self.env.timeout(0.1)
+        self.packet_count_ierp += 1
+
         if (packet["Type"] == "Bordercast"):
             if (len(best_path) > 0):  
                 yield self.env.process(self.forward_BRP_packet(best_path, packet))
@@ -202,8 +206,10 @@ class Node:
         elif (packet["Type"] == "Reply"):
             path = packet["Path"]
             if(path[0] == self.node_id):
-                path.append(packet["Destination"])  # Add destination to path
-                self.paths_to_destinations.append(path)
+                last_node = self.find_node_by_id(path[-1])
+                if (last_node.routing_table.get(packet["Destination"]) is not None):   # Only add to paths if destination is in the last nodes zone
+                    path.append(packet["Destination"])  
+                    self.paths_to_destinations.append(path)
             else:
                 self.BRP_packet_queue.put(packet)
                 yield self.env.process(self.send_BRP_packet())   
@@ -238,6 +244,9 @@ class Node:
             
             packet_loss_for_path.append(packet_loss_sum)
             paths.append(full_path_list)
+
+        if not packet_loss_for_path:
+            return (None, None)
 
         # Find smallest packet_loss for entire path in all paths 
         min_packet_loss = min(packet_loss_for_path)
@@ -325,7 +334,7 @@ class Node:
         neighbour_lat = neighbour_coordinates[0]
         neighbour_lon = neighbour_coordinates[1]
 
-        if (distance.distance(self_lat, self_lon, neighbour_lat, neighbour_lon) < 6000):
+        if (distance.distance(self_lat, self_lon, neighbour_lat, neighbour_lon) < 6050):
             return True
         
         return False
