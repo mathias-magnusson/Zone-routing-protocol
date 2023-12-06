@@ -23,8 +23,7 @@ def network_simulator(env, nodes):
         find_node_neighbours(nodes, i)
         start = env.now
         packet_count = 0
-        packet_count_IERP = 0
-
+        
         for node in nodes:
             node.routing_table_new.clear()
             node.metrics_table_new.clear()
@@ -44,18 +43,26 @@ def network_simulator(env, nodes):
             
         print(f"Packet count iarp: {packet_count}")
 
-        source = 3
-        destination = 9
+        ### Count number og IERP packet for different paths. ###
+        source = [2, 23, 8, 30, 40, 27]
+        destination = [12, 13, 24, 28, 1, 24]
+        packet_count_IERP = 0
 
-        yield env.process(nodes[source].send_data(destination))
-        stop = env.now
-        full_path, ETX_path = nodes[source].get_best_path_ierp(destination)
-        print(f"Best path: {full_path}   -   ETX: {ETX_path}")
+        for x in range(len(source)):
+            packet_counter = 0
+            yield env.process(nodes[source[x]].send_data(destination[x]))
+            stop = env.now
+            full_path, ETX_path = nodes[source[x]].get_best_path_ierp(destination[x])
+            print(f"Best path: {full_path}   -   ETX: {ETX_path}")
 
-        for n in nodes:
-            packet_count_IERP = packet_count_IERP + n.packet_count_ierp
-        
-        print(f"Packet count ierp: {packet_count_IERP}")
+            for n in nodes:
+                packet_counter = packet_counter + n.packet_count_ierp
+                n.packet_count_ierp = 0
+            packet_count_IERP = packet_count_IERP + packet_counter
+            
+            print(f"Packet count ierp: {packet_counter}")
+
+        print(packet_count_IERP/len(source))
 
 # Create environment
 env = simpy.Environment()
