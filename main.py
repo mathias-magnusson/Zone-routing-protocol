@@ -13,10 +13,13 @@ def sort_table(table):
     sorted_routing = sorted(table.items())
     return dict(sorted_routing)
 
-run_time = 1
-sample_time = 1
+run_time = 200
+sample_time = 30
 
-def network_simulator(env, nodes):
+intervals = []
+intervals.append(list(range(0, 6030, 30)))
+
+def IARP_process(env, nodes):
     for i in range(run_time):
         np.random.seed(41)
 
@@ -43,6 +46,7 @@ def network_simulator(env, nodes):
             
         print(f"Packet count iarp: {packet_count}")
 
+def IERP_process(env, nodes):
         ### Count number og IERP packet for different paths. ###
         source = [2, 23, 8, 30, 40, 27]
         destination = [12, 13, 24, 28, 1, 24]
@@ -70,9 +74,11 @@ env = simpy.Environment()
 # Create nodes
 nodes = []
 zone_radius = 2
-for i in range(66):
+for i in range(30):
     nodes.append(Node.Node(env, i, zone_radius, position=LoadData.get_position_data(i)))
 
 # Run the simulation
-env.process(network_simulator(env,nodes))
+
+env.process(IARP_process(env, nodes))
+env.process(IERP_process(env, nodes))
 env.run()
