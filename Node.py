@@ -6,6 +6,8 @@ import copy
 from queue import Queue
 import numpy as np
 from scipy.stats import halfnorm
+from threading import Timer
+import simpy
 
 class Node:
     def __init__(self, env, node_id: int, zone_radius: int, neighbours = None, position = None):
@@ -25,6 +27,7 @@ class Node:
         self.paths_to_destinations = []
         self.packet_count_iarp = 0
         self.packet_count_ierp = 0
+        self.event = env.event()
 
     def send_data(self, destination : int):
         if (self.routing_table.get(destination) is not None):
@@ -186,7 +189,10 @@ class Node:
             if (packet["Type"] == "Bordercast"):
                 periphiral_node_id = packet["Next node"]
                 best_path = self.get_best_path_iarp(periphiral_node_id)
-                yield self.env.process(self.find_node_by_id(best_path.pop(0)).receive_BRP_packet(packet, best_path))
+                try:
+                    yield self.env.process(self.find_node_by_id(best_path.pop(0)).receive_BRP_packet(packet, best_path))
+                except simpy.Interrupt:
+                    print("Exception")
             elif (packet["Type"] == "Reply"):
                 path = packet["Path"]
                 index_dest = path.index(self.node_id) - 1       

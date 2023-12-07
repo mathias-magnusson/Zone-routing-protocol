@@ -1,8 +1,11 @@
 import numpy as np
 import simpy
-import sys
 import Node
 import LoadData
+
+iteration_count = 0
+iarp_guard = 0
+ierp_guard = 0
 
 def find_node_neighbours(nodes: [], index : int):
     for node in nodes:
@@ -13,20 +16,14 @@ def sort_table(table):
     sorted_routing = sorted(table.items())
     return dict(sorted_routing)
 
-run_time = 200
-sample_time = 30
-
-intervals = []
-intervals.append(list(range(0, 6030, 30)))
-
-def IARP_process(env, nodes):
-    for i in range(run_time):
+# Periodic process
+def IARP_process(env, nodes, source):
+    global iteration_count, iarp_guard
+    while True:
         np.random.seed(41)
-
-        find_node_neighbours(nodes, i)
-        start = env.now
+        find_node_neighbours(nodes, iteration_count)
         packet_count = 0
-        
+        print(f"IARP starting at {env.now}")
         for node in nodes:
             node.routing_table_new.clear()
             node.metrics_table_new.clear()
@@ -42,31 +39,48 @@ def IARP_process(env, nodes):
                 packet_count = packet_count + n.packet_count_iarp
                 n.packet_count_iarp = 0
             
-            print(f"Node {node.node_id} processed - Packet count: {packet_count}")
+            #print(f"Node {node.node_id} processed - Packet count: {packet_count}")
             
-        print(f"Packet count iarp: {packet_count}")
+        print(f"IARP finished at {env.now}")
+        iteration_count += 1
 
-def IERP_process(env, nodes):
-        ### Count number og IERP packet for different paths. ###
-        source = [2, 23, 8, 30, 40, 27]
-        destination = [12, 13, 24, 28, 1, 24]
+        nodes[source[0]].event.succeed()  # "reactivate"
+        nodes[source[0]].event = env.event()
+        iarp_guard += 1
+        yield env.timeout(30)
+
+def send_data_process(env, nodes):
+        source = [7]
+        destination = [23]
         packet_count_IERP = 0
+        global iarp_guard
+        while True:
+            if (iarp_guard % 30 == 0):
+                print("Passivating")
+                yield nodes[source[0]].event  # "passivate"
+            else:
+                print(f"send_data() starting at {env.now}")
+                for x in range(len(source)):
+                    packet_counter = 0
+                    
+                    yield env.process(nodes[source[x]].send_data(destination[x]))
+                    full_path, ETX_path = nodes[source[x]].get_best_path_ierp(destination[x])
+                    print(f"Best path: {full_path}   -   ETX: {ETX_path}")
 
-        for x in range(len(source)):
-            packet_counter = 0
-            yield env.process(nodes[source[x]].send_data(destination[x]))
-            stop = env.now
-            full_path, ETX_path = nodes[source[x]].get_best_path_ierp(destination[x])
-            print(f"Best path: {full_path}   -   ETX: {ETX_path}")
+                    for n in nodes:
+                        packet_counter = packet_counter + n.packet_count_ierp
+                        n.packet_count_ierp = 0
+                    packet_count_IERP = packet_count_IERP + packet_counter
+                    
+                    #print(f"Packet count ierp: {packet_counter}")
 
-            for n in nodes:
-                packet_counter = packet_counter + n.packet_count_ierp
-                n.packet_count_ierp = 0
-            packet_count_IERP = packet_count_IERP + packet_counter
-            
-            print(f"Packet count ierp: {packet_counter}")
+                #print(f"Average IERP count: {packet_count_IERP/len(source)}")
+                print(f"send_data() finished at {env.now}")
+                yield env.timeout(5)  # Some arbitrary interval for the other process
 
-        print(packet_count_IERP/len(source))
+                # Increment guard
+                iarp_guard += 1
+
 
 # Create environment
 env = simpy.Environment()
@@ -74,11 +88,14 @@ env = simpy.Environment()
 # Create nodes
 nodes = []
 zone_radius = 2
-for i in range(30):
+source = [7]
+for i in range(66):
     nodes.append(Node.Node(env, i, zone_radius, position=LoadData.get_position_data(i)))
 
-# Run the simulation
+#Start the periodic process IARP
+env.process(IARP_process(env, nodes, source))
 
-env.process(IARP_process(env, nodes))
-env.process(IERP_process(env, nodes))
+# Start the non-perioic process IERP
+env.process(send_data_process(env, nodes))
+
 env.run()
