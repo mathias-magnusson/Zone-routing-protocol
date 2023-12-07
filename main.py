@@ -4,6 +4,7 @@ import sys
 import Node
 import LoadData
 
+
 def find_node_neighbours(nodes: [], index : int):
     for node in nodes:
         node.find_neighbour_nodes(nodes, index)
