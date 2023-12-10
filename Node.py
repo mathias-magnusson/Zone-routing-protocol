@@ -27,7 +27,7 @@ class Node:
         self.paths_to_destinations = []
         self.packet_count_iarp = 0
         self.packet_count_ierp = 0
-        self.event = env.event()
+        self.packet_count = 0
 
     def send_data(self, destination : int):
         if (self.routing_table.get(destination) is not None):
@@ -43,8 +43,7 @@ class Node:
     
     def send_packet(self):
         while (self.packet_queue.qsize() > 0):
-            yield self.env.timeout(0.001)
-            packet = self.packet_queue.get(0)             
+            packet = self.packet_queue.get(0)      
 
             if(packet["Type"] == "ADVERTISEMENT"):
                 next_node = self.find_node_by_id(packet["Next node"])
@@ -58,7 +57,6 @@ class Node:
                 print("I don't know this packet type")
 
     def receive_packet(self, packet):
-        yield self.env.timeout(0.001)
         self.packet_count_iarp += 1
 
         if(packet["Type"] == "ADVERTISEMENT"):
@@ -70,9 +68,9 @@ class Node:
                 yield self.env.process(self.send_packet())
             else:
                 packet["TTL"] = packet["TTL"] - 1
-                self.generate_iarp_packet(packet)              
+                self.generate_iarp_packet(packet)
                 yield self.env.process(self.send_packet())
-                
+
         elif(packet["Type"] == "ADVERTISEMENT REPLY"):
             packet["Packet loss"].append(self.get_random_value())
 
@@ -144,9 +142,9 @@ class Node:
         else:
             self.find_periphiral_nodes()            
             if (packet != None):
-                self.generate_BRP_packet(destination, packet)
+                yield self.env.process(self.generate_BRP_packet(destination, packet))
             else:
-                self.generate_BRP_packet(destination)
+                yield self.env.process(self.generate_BRP_packet(destination))
             yield self.env.process(self.send_BRP_packet())
 
     def generate_BRP_packet(self, destination: int, currentPacket = None):
@@ -180,12 +178,14 @@ class Node:
                 BRP_packet = copy.deepcopy(currentPacket)
                 BRP_packet["Type"] = "Reply"
                 self.BRP_packet_queue.put(BRP_packet)
+        
+        execution_time = 0.002 * self.zone_radius                # 0.002 = 0.001*2 for each transmission - accounting for both broadcast and acknowledge. 
+        yield self.env.timeout(execution_time)                   # Simulate broadcasting to all periphiral nodes - based on zone radius
+
 
     def send_BRP_packet(self):
         while (self.BRP_packet_queue.qsize() > 0):
-            yield self.env.timeout(0.001)
             packet = self.BRP_packet_queue.get(0)         
-
             if (packet["Type"] == "Bordercast"):
                 periphiral_node_id = packet["Next node"]
                 best_path = self.get_best_path_iarp(periphiral_node_id)
@@ -200,7 +200,6 @@ class Node:
                 yield self.env.process(destination_node.receive_BRP_packet(packet))
 
     def receive_BRP_packet(self, packet, best_path = None): 
-        yield self.env.timeout(0.001)
         self.packet_count_ierp += 1
 
         if (packet["Type"] == "Bordercast"):
@@ -221,7 +220,6 @@ class Node:
                 yield self.env.process(self.send_BRP_packet())   
 
     def forward_BRP_packet(self, best_path, packet):
-        yield self.env.timeout(0.001)
         yield self.env.process(self.find_node_by_id(best_path.pop(0)).receive_BRP_packet(packet, best_path))
 
     def get_best_path_ierp(self, destination : int):
