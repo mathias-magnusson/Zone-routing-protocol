@@ -245,43 +245,6 @@ class Node:
                     full_path.append(id)
         return (full_path, best_path[1])
 
-    """def get_best_path_ierp(self, destination : int):
-        paths = []
-        packet_loss_for_path = []
-
-        if (self.routing_table.get(destination) is not None):           ## Check if the path is within the zone of the start node       
-            path, loss = self.get_best_path_iarp(destination, True)
-            path = [self.node_id] + path
-            return path, loss
-
-        for path in self.paths_to_destinations:              
-            asking_node_id = path[0]
-            path = path[1:]
-            full_path_list = [self.node_id]
-            packet_loss_sum = 0        
-
-            for node_id in path:
-                path_to_destination, packet_loss = self.nodes[asking_node_id].get_best_path_iarp(node_id, True)
-                asking_node_id = node_id
-                
-                for item in path_to_destination:
-                    full_path_list.append(item)
-                
-                packet_loss_sum += packet_loss
-            
-            packet_loss_for_path.append(packet_loss_sum)
-            paths.append(full_path_list)
-
-        if not packet_loss_for_path:
-            return (None, None)
-
-        # Find smallest packet_loss for entire path in all paths 
-        min_packet_loss = min(packet_loss_for_path)
-        index_of_min_packet_loss = packet_loss_for_path.index(min_packet_loss)
-        # Returning both periphiral path and full path
-        return (paths[index_of_min_packet_loss], min_packet_loss)"""
-
-
 ####### HELPER FUNCTIONS ########
 
     def find_periphiral_nodes(self):
