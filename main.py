@@ -14,6 +14,7 @@ import planned_transmissions as pt
 
 print_once = True
 packet_count_IERP = 0
+IARP_time = 0
 
 all_tranmissions = [(58, 7, 0), (44, 19, 5), (13, 29, 11), (35, 20, 17), (8, 2, 23)]
 iteration_counter = 0
@@ -55,6 +56,7 @@ def network_process(env, nodes):
 
 def IARP_process(env, nodes):
     global iteration_counter
+    global IARP_time
     np.random.seed(41)
     find_node_neighbours(nodes, iteration_counter)
 
@@ -83,6 +85,7 @@ def IARP_process(env, nodes):
     start_time = env.now
     yield env.process(calculate_execution_time())
     print(f"IARP finished - Time: {env.now-start_time} - Packet count: {packet_count_iarp}")
+    IARP_time = env.now-start_time
     iteration_counter += 1
 
 def send_data_process(env, nodes):
@@ -113,7 +116,7 @@ def send_data_process(env, nodes):
         
         if not all_tranmissions and print_once == True:
             print_once = False
-            print(f"Ierp finished - Time {env.now-IERP_start_time} - Average No. of packets: {packet_count_IERP/5}") 
+            print(f"Ierp finished - Time {IERP_start_time-IARP_time} - Average No. of packets: {packet_count_IERP/5}") 
         else:
             yield env.timeout(0.01)         
   
@@ -122,7 +125,7 @@ env = simpy.Environment()
 
 # Create nodes
 nodes = []
-zone_radius = 2
+zone_radius = 4
 num_nodes = 66
 for i in range(num_nodes):
     nodes.append(Node.Node(env, i, zone_radius, position=LoadData.get_position_data(i)))
