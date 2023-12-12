@@ -27,7 +27,6 @@ class Node:
         self.paths_to_destinations = []
         self.packet_count_iarp = 0
         self.packet_count_ierp = 0
-        self.packet_count = 0
 
     def send_data(self, destination : int):
         if (self.routing_table.get(destination) is not None):

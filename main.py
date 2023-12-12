@@ -50,6 +50,7 @@ def IARP_process(env, nodes):
     
     print(f"\nIARP starting - Time: {env.now}")
 
+    packet_count_iarp = 0
     for node in nodes:
         packet_count = 0
         node.routing_table_new.clear()
@@ -66,8 +67,7 @@ def IARP_process(env, nodes):
             packet_count = packet_count + n.packet_count_iarp
             n.packet_count_iarp = 0
         
-        #print(f"Node {node.node_id} finished - Packet count: {packet_count}")
-        node.packet_count = packet_count
+        packet_count_iarp += packet_count
 
     start_time = env.now
     yield env.process(calculate_execution_time())
