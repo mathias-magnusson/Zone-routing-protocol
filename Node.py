@@ -6,6 +6,8 @@ import copy
 from queue import Queue
 import numpy as np
 from scipy.stats import halfnorm
+from threading import Timer
+import simpy
 
 class Node:
     def __init__(self, env, node_id: int, zone_radius: int, neighbours = None, position = None):
@@ -25,10 +27,13 @@ class Node:
         self.paths_to_destinations = []
         self.packet_count_iarp = 0
         self.packet_count_ierp = 0
+        self.packet_count = 0
 
     def send_data(self, destination : int):
         if (self.routing_table.get(destination) is not None):
-            self.paths_to_destinations.append(self.get_best_path_iarp(destination))
+            path, ETX = self.get_best_path_iarp(destination, True)
+            path.insert(0, self.node_id)
+            self.paths_to_destinations.append((path, ETX))
         else:
             yield self.env.process(self.ierp(destination))
 
@@ -40,8 +45,7 @@ class Node:
     
     def send_packet(self):
         while (self.packet_queue.qsize() > 0):
-            yield self.env.timeout(0.1)
-            packet = self.packet_queue.get(0)             
+            packet = self.packet_queue.get(0)      
 
             if(packet["Type"] == "ADVERTISEMENT"):
                 next_node = self.find_node_by_id(packet["Next node"])
@@ -55,7 +59,6 @@ class Node:
                 print("I don't know this packet type")
 
     def receive_packet(self, packet):
-        yield self.env.timeout(0.1)
         self.packet_count_iarp += 1
 
         if(packet["Type"] == "ADVERTISEMENT"):
@@ -67,9 +70,9 @@ class Node:
                 yield self.env.process(self.send_packet())
             else:
                 packet["TTL"] = packet["TTL"] - 1
-                self.generate_iarp_packet(packet)              
+                self.generate_iarp_packet(packet)
                 yield self.env.process(self.send_packet())
-                
+
         elif(packet["Type"] == "ADVERTISEMENT REPLY"):
             packet["Packet loss"].append(self.get_random_value())
 
@@ -141,9 +144,9 @@ class Node:
         else:
             self.find_periphiral_nodes()            
             if (packet != None):
-                self.generate_BRP_packet(destination, packet)
+                yield self.env.process(self.generate_BRP_packet(destination, packet))
             else:
-                self.generate_BRP_packet(destination)
+                yield self.env.process(self.generate_BRP_packet(destination))
             yield self.env.process(self.send_BRP_packet())
 
     def generate_BRP_packet(self, destination: int, currentPacket = None):
@@ -153,7 +156,8 @@ class Node:
                     "Destination": destination,
                     "Path" : [self.node_id],
                     "Type" : "Bordercast",
-                    "Next node": node_id
+                    "Next node": node_id,
+                    "Full ETX" : 0
                 }
                 self.BRP_packet_queue.put(BRP_packet)
 
@@ -177,16 +181,22 @@ class Node:
                 BRP_packet = copy.deepcopy(currentPacket)
                 BRP_packet["Type"] = "Reply"
                 self.BRP_packet_queue.put(BRP_packet)
+        
+        execution_time = 0.001 * self.zone_radius                # 0.002 = 0.001*2 for each transmission 
+        yield self.env.timeout(execution_time)                   # Simulate broadcasting to all periphiral nodes - based on zone radius
+
 
     def send_BRP_packet(self):
         while (self.BRP_packet_queue.qsize() > 0):
-            yield self.env.timeout(0.1)
             packet = self.BRP_packet_queue.get(0)         
-
             if (packet["Type"] == "Bordercast"):
                 periphiral_node_id = packet["Next node"]
-                best_path = self.get_best_path_iarp(periphiral_node_id)
-                yield self.env.process(self.find_node_by_id(best_path.pop(0)).receive_BRP_packet(packet, best_path))
+                best_path, iarp_ETX = self.get_best_path_iarp(periphiral_node_id, True)
+                packet["Full ETX"] += iarp_ETX
+                try:
+                    yield self.env.process(self.find_node_by_id(best_path.pop(0)).receive_BRP_packet(packet, best_path))
+                except simpy.Interrupt:
+                    print("Exception")
             elif (packet["Type"] == "Reply"):
                 path = packet["Path"]
                 index_dest = path.index(self.node_id) - 1       
@@ -194,7 +204,6 @@ class Node:
                 yield self.env.process(destination_node.receive_BRP_packet(packet))
 
     def receive_BRP_packet(self, packet, best_path = None): 
-        yield self.env.timeout(0.1)
         self.packet_count_ierp += 1
 
         if (packet["Type"] == "Bordercast"):
@@ -208,52 +217,32 @@ class Node:
             if(path[0] == self.node_id):
                 last_node = self.find_node_by_id(path[-1])
                 if (last_node.routing_table.get(packet["Destination"]) is not None):   # Only add to paths if destination is in the last nodes zone
-                    path.append(packet["Destination"])  
-                    self.paths_to_destinations.append(path)
+                    
+                    best_path, ETX = last_node.get_best_path_iarp(packet["Destination"], True)
+                    path.append(packet["Destination"])
+                    packet["Full ETX"] += ETX
+                    self.paths_to_destinations.append((path, packet["Full ETX"]))
             else:
                 self.BRP_packet_queue.put(packet)
                 yield self.env.process(self.send_BRP_packet())   
 
     def forward_BRP_packet(self, best_path, packet):
-        yield self.env.timeout(0.1)
         yield self.env.process(self.find_node_by_id(best_path.pop(0)).receive_BRP_packet(packet, best_path))
 
-    def get_best_path_ierp(self, destination : int):
-        paths = []
-        packet_loss_for_path = []
+    def get_best_path_ierp(self):
+        best_path = min(self.paths_to_destinations, key=lambda x: x[1])
 
-        if (self.routing_table.get(destination) is not None):           ## Check if the path is within the zone of the start node       
-            path, loss = self.get_best_path_iarp(destination, True)
-            path = [self.node_id] + path
-            return path, loss
+        full_path = [] 
+        full_path.append(best_path[0][0])
+        for i, peri_node_id in enumerate(best_path[0]):
+            peri_node = self.find_node_by_id(peri_node_id)
 
-        for path in self.paths_to_destinations:              
-            asking_node_id = path[0]
-            path = path[1:]
-            full_path_list = [self.node_id]
-            packet_loss_sum = 0        
-
-            for node_id in path:
-                path_to_destination, packet_loss = self.nodes[asking_node_id].get_best_path_iarp(node_id, True)
-                asking_node_id = node_id
-                
-                for item in path_to_destination:
-                    full_path_list.append(item)
-                
-                packet_loss_sum += packet_loss
-            
-            packet_loss_for_path.append(packet_loss_sum)
-            paths.append(full_path_list)
-
-        if not packet_loss_for_path:
-            return (None, None)
-
-        # Find smallest packet_loss for entire path in all paths 
-        min_packet_loss = min(packet_loss_for_path)
-        index_of_min_packet_loss = packet_loss_for_path.index(min_packet_loss)
-        # Returning both periphiral path and full path
-        return (paths[index_of_min_packet_loss], min_packet_loss)
-
+            if i < len(best_path[0]) - 1:
+                destination_id = best_path[0][i + 1]
+                temp_path = peri_node.get_best_path_iarp(destination_id)
+                for id in temp_path:
+                    full_path.append(id)
+        return (full_path, best_path[1])
 
 ####### HELPER FUNCTIONS ########
 
@@ -324,8 +313,6 @@ class Node:
         return tuple_with_two_numbers
     
     def is_neighbour_in_LOS(self, time_index, neighbour):
-        """ Assumes an altitude of 718km """
-
         self_coordinates = self.get_position_at_time(time_index)
         self_lat = self_coordinates[0]
         self_lon = self_coordinates[1]

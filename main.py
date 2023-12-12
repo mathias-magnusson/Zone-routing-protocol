@@ -1,8 +1,11 @@
 import numpy as np
 import simpy
-import sys
 import Node
 import LoadData
+import planned_transmissions as pt
+
+all_tranmissions = pt.generate_planned_transmission()
+iteration_counter = 0
 
 
 def find_node_neighbours(nodes: [], index : int):
@@ -14,66 +17,100 @@ def sort_table(table):
     sorted_routing = sorted(table.items())
     return dict(sorted_routing)
 
-run_time = 1
-sample_time = 1
+def calculate_execution_time():
+    execution_time = 0
+    total_paths = 0
 
-def network_simulator(env, nodes):
-    for i in range(run_time):
-        np.random.seed(41)
+    for node in nodes:
+        total_paths = sum(len(entry) for entry in node.routing_table.values())
+        for key in node.routing_table:
+            total_paths += sum(len(entry) for entry in nodes[key].routing_table.values())
+        execution_time += total_paths * 0.0001   
 
-        find_node_neighbours(nodes, i)
-        start = env.now
+    execution_time = execution_time/num_nodes
+    yield env.timeout(execution_time)
+
+def network_process(env, nodes):
+    first_run = True
+    runned_at_time = 0
+    while True:
+        if first_run: 
+            yield env.process(IARP_process(env, nodes))
+            first_run = False
+        elif (env.now - runned_at_time) >= 30:
+            runned_at_time = env.now
+            yield env.process(IARP_process(env, nodes))
+            
+        yield env.process(send_data_process(env, nodes))
+
+def IARP_process(env, nodes):
+    global iteration_counter
+    np.random.seed(41)
+    find_node_neighbours(nodes, iteration_counter)
+    
+    print(f"\nIARP starting - Time: {env.now}")
+
+    for node in nodes:
         packet_count = 0
+        node.routing_table_new.clear()
+        node.metrics_table_new.clear()
+        node.paths_to_destinations.clear()
+        yield env.process(node.iarp())
+        node.routing_table = node.routing_table_new
+        node.metrics_table = node.metrics_table_new
+
+        node.routing_table = sort_table(node.routing_table)
+        node.metrics_table = sort_table(node.metrics_table)
+
+        for n in nodes:
+            packet_count = packet_count + n.packet_count_iarp
+            n.packet_count_iarp = 0
         
-        for node in nodes:
-            node.routing_table_new.clear()
-            node.metrics_table_new.clear()
-            node.paths_to_destinations.clear()
-            yield env.process(node.iarp())
-            node.routing_table = node.routing_table_new
-            node.metrics_table = node.metrics_table_new
+        #print(f"Node {node.node_id} finished - Packet count: {packet_count}")
+        node.packet_count = packet_count
 
-            node.routing_table = sort_table(node.routing_table)
-            node.metrics_table = sort_table(node.metrics_table)
+    start_time = env.now
+    yield env.process(calculate_execution_time())
+    print(f"IARP finished - Time: {env.now-start_time}")
+    iteration_counter += 1
 
-            for n in nodes:
-                packet_count = packet_count + n.packet_count_iarp
-                n.packet_count_iarp = 0
-            
-            print(f"Node {node.node_id} processed - Packet count: {packet_count}")
-            
-        print(f"Packet count iarp: {packet_count}")
-
-        ### Count number og IERP packet for different paths. ###
-        source = [2, 23, 8, 30, 40, 27]
-        destination = [12, 13, 24, 28, 1, 24]
+def send_data_process(env, nodes):
         packet_count_IERP = 0
+        
+        for tranmission in all_tranmissions:
+            origin_node_id, destination_node_id, start_time = tranmission
 
-        for x in range(len(source)):
-            packet_counter = 0
-            yield env.process(nodes[source[x]].send_data(destination[x]))
-            stop = env.now
-            full_path, ETX_path = nodes[source[x]].get_best_path_ierp(destination[x])
-            print(f"Best path: {full_path}   -   ETX: {ETX_path}")
+            if (start_time < env.now):
+                node_start = env.now
+                print(f"Node {origin_node_id} trying to send at time: {env.now}")
+                packet_counter = 0
+                
+                yield env.process(nodes[origin_node_id].send_data(destination_node_id))
+                full_path, ETX_path = nodes[origin_node_id].get_best_path_ierp()
+                print(f"Best path: {full_path}   -   ETX: {ETX_path}")
 
-            for n in nodes:
-                packet_counter = packet_counter + n.packet_count_ierp
-                n.packet_count_ierp = 0
-            packet_count_IERP = packet_count_IERP + packet_counter
-            
-            print(f"Packet count ierp: {packet_counter}")
+                for n in nodes:
+                    packet_counter = packet_counter + n.packet_count_ierp
+                    n.packet_count_ierp = 0
+                packet_count_IERP = packet_count_IERP + packet_counter
 
-        print(packet_count_IERP/len(source))
-
+                
+                
+                print(f"Send_data() finished - Time: {env.now-node_start} - Packet count ierp: {packet_counter}")
+                
+                all_tranmissions.pop(all_tranmissions.index(tranmission))
+                
+        yield env.timeout(0.01)
+  
 # Create environment
 env = simpy.Environment()
 
 # Create nodes
 nodes = []
 zone_radius = 2
-for i in range(66):
+num_nodes = 66
+for i in range(num_nodes):
     nodes.append(Node.Node(env, i, zone_radius, position=LoadData.get_position_data(i)))
 
-# Run the simulation
-env.process(network_simulator(env,nodes))
-env.run()
+env.process(network_process(env, nodes))
+env.run(until=6000)                         # 6000 = 100 minutes in seconds
