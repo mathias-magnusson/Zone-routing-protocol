@@ -18,15 +18,14 @@ def sort_table(table):
 
 def calculate_execution_time():
     execution_time = 0
-    num_packets = 0
+    total_paths = 0
 
     for node in nodes:
-        num_packets = node.packet_count
+        total_paths = sum(len(entry) for entry in node.routing_table.values())
         for key in node.routing_table:
-            num_packets += nodes[key].packet_count
-
-        execution_time += (num_packets/len(node.routing_table)) * 0.001
-    
+            total_paths += sum(len(entry) for entry in nodes[key].routing_table.values())
+        execution_time += total_paths * 0.0001   
+        
     execution_time = execution_time/num_nodes
     yield env.timeout(execution_time)
 
@@ -86,7 +85,7 @@ def send_data_process(env, nodes):
                 packet_counter = 0
                 
                 yield env.process(nodes[origin_node_id].send_data(destination_node_id))
-                full_path, ETX_path = nodes[origin_node_id].get_best_path_ierp(destination_node_id)
+                full_path, ETX_path = nodes[origin_node_id].get_best_path_ierp()
                 print(f"Best path: {full_path}   -   ETX: {ETX_path}")
 
                 for n in nodes:
