@@ -47,9 +47,9 @@ def network_process(env, nodes):
         if first_run: 
             yield env.process(IARP_process(env, nodes))
             first_run = False
-        elif (env.now - runned_at_time) >= 30:
-            runned_at_time = env.now
-            yield env.process(IARP_process(env, nodes))
+        #elif (env.now - runned_at_time) >= 30:
+        #    runned_at_time = env.now
+        #    yield env.process(IARP_process(env, nodes))
             
         yield env.process(send_data_process(env, nodes))
 
@@ -57,7 +57,7 @@ def IARP_process(env, nodes):
     global iteration_counter
     np.random.seed(41)
     find_node_neighbours(nodes, iteration_counter)
-    
+
     print(f"\nIARP starting - Time: {env.now}")
 
     packet_count_iarp = 0
@@ -78,16 +78,18 @@ def IARP_process(env, nodes):
             n.packet_count_iarp = 0
         
         packet_count_iarp += packet_count
+        print(f"Node {node.node_id} finished")
 
     start_time = env.now
     yield env.process(calculate_execution_time())
-    print(f"IARP finished - Time: {env.now-start_time}")
+    print(f"IARP finished - Time: {env.now-start_time} - Packet count: {packet_count_iarp}")
     iteration_counter += 1
-
 
 def send_data_process(env, nodes):
         global packet_count_IERP
         global print_once
+
+        IERP_start_time = env.now
         
         for tranmission in all_tranmissions:
             origin_node_id, destination_node_id, start_time = tranmission
@@ -111,7 +113,7 @@ def send_data_process(env, nodes):
         
         if not all_tranmissions and print_once == True:
             print_once = False
-            print(f"Ierp average number of packets: {packet_count_IERP/5}") 
+            print(f"Ierp finished - Time {env.now-IERP_start_time} - Average No. of packets: {packet_count_IERP/5}") 
         else:
             yield env.timeout(0.01)         
   
