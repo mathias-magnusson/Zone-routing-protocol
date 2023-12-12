@@ -15,6 +15,7 @@ import planned_transmissions as pt
 print_once = True
 packet_count_IERP = 0
 IARP_time = 0
+IERP_time = 0
 
 all_tranmissions = [(58, 7, 0), (44, 19, 5), (13, 29, 11), (35, 20, 17), (8, 2, 23)]
 iteration_counter = 0
@@ -43,13 +44,13 @@ def calculate_execution_time():
 
 def network_process(env, nodes):
     first_run = True
-    runned_at_time = 0
+    ran_at_time = 0
     while True:
         if first_run: 
             yield env.process(IARP_process(env, nodes))
             first_run = False
-        #elif (env.now - runned_at_time) >= 30:
-        #    runned_at_time = env.now
+        #elif (env.now - ran_at_time) >= 30:
+        #    ran_at_time = env.now
         #    yield env.process(IARP_process(env, nodes))
             
         yield env.process(send_data_process(env, nodes))
@@ -91,8 +92,7 @@ def IARP_process(env, nodes):
 def send_data_process(env, nodes):
         global packet_count_IERP
         global print_once
-
-        IERP_start_time = env.now
+        global IERP_time
         
         for tranmission in all_tranmissions:
             origin_node_id, destination_node_id, start_time = tranmission
@@ -111,21 +111,22 @@ def send_data_process(env, nodes):
                     n.packet_count_ierp = 0
                 packet_count_IERP = packet_count_IERP + packet_counter
 
-                #print(f"Send_data() finished - Time: {env.now-node_start} - Packet count ierp: {packet_counter}")
+                print(f"Send_data() finished - Time: {env.now-node_start} - Packet count ierp: {packet_counter}")
                 all_tranmissions.pop(all_tranmissions.index(tranmission))
+                IERP_time += env.now-node_start
         
         if not all_tranmissions and print_once == True:
             print_once = False
-            print(f"Ierp finished - Time {IERP_start_time-IARP_time} - Average No. of packets: {packet_count_IERP/5}") 
+            print(f"Ierp finished - Avg. time {IERP_time/5} - Average No. of packets: {packet_count_IERP/5}") 
         else:
-            yield env.timeout(0.01)         
+            yield env.timeout(0.01)
   
 # Create environment
 env = simpy.Environment()
 
 # Create nodes
 nodes = []
-zone_radius = 4
+zone_radius = 2
 num_nodes = 66
 for i in range(num_nodes):
     nodes.append(Node.Node(env, i, zone_radius, position=LoadData.get_position_data(i)))
