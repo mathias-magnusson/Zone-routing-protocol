@@ -182,7 +182,7 @@ class Node:
                 BRP_packet["Type"] = "Reply"
                 self.BRP_packet_queue.put(BRP_packet)
         
-        execution_time = 0.002 * self.zone_radius                # 0.002 = 0.001*2 for each transmission - accounting for both broadcast and acknowledge. 
+        execution_time = 0.001 * self.zone_radius                # 0.002 = 0.001*2 for each transmission 
         yield self.env.timeout(execution_time)                   # Simulate broadcasting to all periphiral nodes - based on zone radius
 
 
@@ -193,7 +193,6 @@ class Node:
                 periphiral_node_id = packet["Next node"]
                 best_path, iarp_ETX = self.get_best_path_iarp(periphiral_node_id, True)
                 packet["Full ETX"] += iarp_ETX
-
                 try:
                     yield self.env.process(self.find_node_by_id(best_path.pop(0)).receive_BRP_packet(packet, best_path))
                 except simpy.Interrupt:
@@ -314,8 +313,6 @@ class Node:
         return tuple_with_two_numbers
     
     def is_neighbour_in_LOS(self, time_index, neighbour):
-        """ Assumes an altitude of 718km """
-
         self_coordinates = self.get_position_at_time(time_index)
         self_lat = self_coordinates[0]
         self_lon = self_coordinates[1]

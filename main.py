@@ -25,7 +25,7 @@ def calculate_execution_time():
         for key in node.routing_table:
             total_paths += sum(len(entry) for entry in nodes[key].routing_table.values())
         execution_time += total_paths * 0.0001   
-        
+
     execution_time = execution_time/num_nodes
     yield env.timeout(execution_time)
 
@@ -92,6 +92,8 @@ def send_data_process(env, nodes):
                     packet_counter = packet_counter + n.packet_count_ierp
                     n.packet_count_ierp = 0
                 packet_count_IERP = packet_count_IERP + packet_counter
+
+                
                 
                 print(f"Send_data() finished - Time: {env.now-node_start} - Packet count ierp: {packet_counter}")
                 
