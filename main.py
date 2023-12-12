@@ -4,9 +4,19 @@ import Node
 import LoadData
 import planned_transmissions as pt
 
-all_tranmissions = pt.generate_planned_transmission()
-iteration_counter = 0
+#all_tranmissions = pt.generate_planned_transmission()
 
+# 18: [(0, 5, 0), (6, 15, 5), (10, 14, 11), (11, 7, 17), (9, 13, 23)]
+# 30: [(0, 7, 0), (2, 26, 5), (22, 11, 11), (15, 8, 17), (27, 20, 23)]
+# 42: [(0, 4, 0), (34, 25, 5), (9, 12, 11), (32, 2, 17), (39, 8, 23)]
+# 54: [(48, 52, 0), (33, 12, 5), (28, 7, 11), (51, 2, 17), (42, 20, 23)]
+# 66: [(58, 7, 0), (44, 19, 5), (13, 29, 11), (35, 20, 17), (8, 2, 23)]
+
+print_once = True
+packet_count_IERP = 0
+
+all_tranmissions = [(58, 7, 0), (44, 19, 5), (13, 29, 11), (35, 20, 17), (8, 2, 23)]
+iteration_counter = 0
 
 def find_node_neighbours(nodes: [], index : int):
     for node in nodes:
@@ -74,15 +84,17 @@ def IARP_process(env, nodes):
     print(f"IARP finished - Time: {env.now-start_time}")
     iteration_counter += 1
 
+
 def send_data_process(env, nodes):
-        packet_count_IERP = 0
+        global packet_count_IERP
+        global print_once
         
         for tranmission in all_tranmissions:
             origin_node_id, destination_node_id, start_time = tranmission
 
             if (start_time < env.now):
                 node_start = env.now
-                print(f"Node {origin_node_id} trying to send at time: {env.now}")
+                #print(f"Node {origin_node_id} trying to send at time: {env.now}")
                 packet_counter = 0
                 
                 yield env.process(nodes[origin_node_id].send_data(destination_node_id))
@@ -94,13 +106,14 @@ def send_data_process(env, nodes):
                     n.packet_count_ierp = 0
                 packet_count_IERP = packet_count_IERP + packet_counter
 
-                
-                
-                print(f"Send_data() finished - Time: {env.now-node_start} - Packet count ierp: {packet_counter}")
-                
+                #print(f"Send_data() finished - Time: {env.now-node_start} - Packet count ierp: {packet_counter}")
                 all_tranmissions.pop(all_tranmissions.index(tranmission))
-                
-        yield env.timeout(0.01)
+        
+        if not all_tranmissions and print_once == True:
+            print_once = False
+            print(f"Ierp average number of packets: {packet_count_IERP/5}") 
+        else:
+            yield env.timeout(0.01)         
   
 # Create environment
 env = simpy.Environment()

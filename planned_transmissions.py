@@ -20,6 +20,3 @@ def generate_planned_transmission():
     contact_plan.sort(key=lambda x: x[2])
 
     return contact_plan
-
-
-    
