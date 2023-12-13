@@ -229,7 +229,10 @@ class Node:
         yield self.env.process(self.find_node_by_id(best_path.pop(0)).receive_BRP_packet(packet, best_path))
 
     def get_best_path_ierp(self):
-        best_path = min(self.paths_to_destinations, key=lambda x: x[1])
+        if self.paths_to_destinations:
+            best_path = min(self.paths_to_destinations, key=lambda x: x[1])
+        else:
+            return (None, None)
 
         full_path = [] 
         full_path.append(best_path[0][0])
@@ -320,7 +323,7 @@ class Node:
         neighbour_lat = neighbour_coordinates[0]
         neighbour_lon = neighbour_coordinates[1]
 
-        if (distance.distance(self_lat, self_lon, neighbour_lat, neighbour_lon) < 6050):
+        if (distance.distance(self_lat, self_lon, neighbour_lat, neighbour_lon) < 5550):
             return True
         
         return False
