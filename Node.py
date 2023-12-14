@@ -325,7 +325,7 @@ class Node:
         neighbour_lat = neighbour_coordinates[0]
         neighbour_lon = neighbour_coordinates[1]
 
-        if (distance.distance(self_lat, self_lon, neighbour_lat, neighbour_lon) < 6050):
+        if (distance.distance(self_lat, self_lon, neighbour_lat, neighbour_lon) < 6359):
             return True
         
         return False
