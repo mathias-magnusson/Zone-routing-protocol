@@ -184,7 +184,6 @@ class Node:
         execution_time = 0.001 * self.zone_radius                # 0.002 = 0.001*2 for each transmission 
         yield self.env.timeout(execution_time)                   # Simulate broadcasting to all periphiral nodes - based on zone radius
 
-
     def send_BRP_packet(self):
         while (self.BRP_packet_queue.qsize() > 0):
             packet = self.BRP_packet_queue.get(0)         
@@ -204,6 +203,9 @@ class Node:
 
     def receive_BRP_packet(self, packet, best_path = None): 
         self.packet_count_ierp += 1
+
+        if (len(packet["Path"]) > 9):
+            return
 
         if (packet["Type"] == "Bordercast"):
             if (len(best_path) > 0):  
