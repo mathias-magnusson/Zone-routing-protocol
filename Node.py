@@ -285,8 +285,10 @@ class Node:
         return source_ids == self_neigbour_ids
 
     def update_tables(self, path: list, packet_loss: list):
+        
+        packet_loss = self.check_if_already_existing_path(path, packet_loss)
+            
         path = path[1:]         # Excluding the node itself
-
         while len(path) >= 1:
             destination = path[-1]                                            
             if not destination in self.routing_table_new:   # Check if key exists 
@@ -304,7 +306,22 @@ class Node:
 
             path = path[:-1]
             packet_loss = packet_loss[:-1]
-    
+
+    def check_if_already_existing_path(self, path : list, packet_loss : list):
+        rev_path = list(reversed(path))
+        for node in self.nodes:
+            if node.node_id != self.node_id:
+                for key, routes in node.routing_table.items():
+                    if key == self.node_id:
+                        for route in routes:
+                            tmp_route = copy.deepcopy(route)
+                            tmp_route.insert(0, node.node_id)           # insert node_id to compare
+                            if rev_path == tmp_route:
+                                tmp_route = tmp_route[1:]                   # remove node_id again. 
+                                path_index = node.routing_table[key].index(tmp_route)
+                                return list(reversed(node.metrics_table[key][path_index]))
+        return packet_loss
+
     def get_position_at_time(self, time_index: int):
         series_str = self.position[time_index]
         parts = series_str.split()
