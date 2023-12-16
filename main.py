@@ -6,19 +6,18 @@ import planned_transmissions as pt
 
 #all_tranmissions = pt.generate_planned_transmission()
 
-# 18: [(0, 5, 0), (6, 15, 5), (10, 14, 11), (11, 7, 17), (9, 13, 23)]
-# 30: [(0, 7, 0), (2, 26, 5), (22, 11, 11), (15, 8, 17), (27, 20, 23)]
-# 42: [(0, 4, 0), (34, 25, 5), (9, 12, 11), (32, 2, 17), (39, 8, 23)]
-# 54: [(48, 52, 0), (33, 12, 5), (28, 7, 11), (51, 2, 17), (42, 20, 23)]
-# 66: [(58, 7, 0), (44, 19, 5), (13, 29, 11), (35, 20, 17), (8, 2, 23)]
-
 print_once = True
 packet_count_IERP = 0
 IARP_time = 0
 IERP_time = 0
-
-all_tranmissions = [(58, 7, 0), (44, 19, 5), (13, 29, 11), (35, 20, 17), (8, 2, 23)]
 iteration_counter = 0
+
+transmissions_for_num_nodes = []
+transmissions_for_num_nodes.append([(0, 5, 0), (6, 15, 5), (10, 14, 11), (11, 7, 17), (9, 13, 23)])
+transmissions_for_num_nodes.append([(0, 7, 0), (2, 26, 5), (22, 11, 11), (15, 8, 17), (27, 20, 23)])
+transmissions_for_num_nodes.append([(0, 4, 0), (34, 25, 5), (9, 12, 11), (32, 2, 17), (39, 8, 23)])
+transmissions_for_num_nodes.append([(48, 52, 0), (33, 12, 5), (28, 7, 11), (51, 2, 17), (42, 20, 23)])
+transmissions_for_num_nodes.append([(58, 7, 0), (44, 19, 5), (13, 29, 11), (35, 20, 17), (8, 2, 23)])
 
 def find_node_neighbours(nodes: [], index : int):
     for node in nodes:
@@ -41,6 +40,17 @@ def calculate_execution_time():
 
     execution_time = execution_time/num_nodes
     yield env.timeout(execution_time)
+
+def get_element_for_num_nodes(value):
+    element_mapping = {
+        18: 0,
+        30: 1,
+        42: 2,
+        54: 3,
+        66: 4
+    }
+
+    return element_mapping.get(value, -1)
 
 def network_process(env, nodes):
     first_run = True
@@ -129,7 +139,9 @@ nodes = []
 zone_radius = 2
 num_nodes = 66
 for i in range(num_nodes):
-    nodes.append(Node.Node(env, i, zone_radius, position=LoadData.get_position_data(i)))
+    nodes.append(Node.Node(env, i, zone_radius, position=LoadData.get_position_data(i, num_nodes, 718)))
+
+all_tranmissions = transmissions_for_num_nodes[get_element_for_num_nodes(num_nodes)]
 
 env.process(network_process(env, nodes))
 env.run(until=6000)                         # 6000 = 100 minutes in seconds
