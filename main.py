@@ -114,20 +114,20 @@ def send_data_process(env, nodes):
                 
                 yield env.process(nodes[origin_node_id].send_data(destination_node_id))
                 full_path, ETX_path = nodes[origin_node_id].get_best_path_ierp()
-                print(f"Best path: {full_path}   -   ETX: {ETX_path}")
+                print(f"Best path found: {full_path}   -   ETX: {round(ETX_path, 4)}")
 
                 for n in nodes:
                     packet_counter = packet_counter + n.packet_count_ierp
                     n.packet_count_ierp = 0
                 packet_count_IERP = packet_count_IERP + packet_counter
 
-                print(f"Send_data() finished - Time: {env.now-node_start} - Packet count ierp: {packet_counter}")
+                print(f"Time: {round(env.now-node_start, 4)} - Packet count IERP: {packet_counter}\n")
                 all_tranmissions.pop(all_tranmissions.index(tranmission))
                 IERP_time += env.now-node_start
         
         if not all_tranmissions and print_once == True:
             print_once = False
-            print(f"Ierp finished - Avg. time {IERP_time/5} - Average No. of packets: {packet_count_IERP/5}") 
+            print(f"Ierp finished - Avg. time {round(IERP_time/5, 4)} - Average No. of packets: {packet_count_IERP/5}\n") 
         else:
             yield env.timeout(0.01)
   
