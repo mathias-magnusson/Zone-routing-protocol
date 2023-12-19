@@ -288,7 +288,7 @@ class Node:
 
     def update_tables(self, path: list, packet_loss: list):
         
-        packet_loss = self.check_if_already_existing_path(path, packet_loss)
+        #packet_loss = self.check_if_already_existing_path(path, packet_loss)
             
         path = path[1:]         # Excluding the node itself
         while len(path) >= 1:
