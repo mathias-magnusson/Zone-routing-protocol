@@ -1,12 +1,9 @@
-from tabulate import tabulate
-from math import acos, sin, cos
 import distance
 import numpy as np
 import copy
 from queue import Queue
 import numpy as np
 from scipy.stats import halfnorm
-from threading import Timer
 import simpy
 
 KM_FACTOR = 0.001
@@ -217,6 +214,7 @@ class Node:
                 yield self.env.process(self.ierp(packet["Destination"], packet))
         elif (packet["Type"] == "Reply"):
             path = packet["Path"]
+
             if(path[0] == self.node_id):
                 last_node = self.find_node_by_id(path[-1])
                 if (last_node.routing_table.get(packet["Destination"]) is not None):   # Only add to paths if destination is in the last nodes zone
@@ -288,7 +286,8 @@ class Node:
 
     def update_tables(self, path: list, packet_loss: list):
         
-        #packet_loss = self.check_if_already_existing_path(path, packet_loss)
+        # Check if a node has already found this path, and use the ETX if true
+        packet_loss = self.check_if_already_existing_path(path, packet_loss)            # !!! uncomment if code is running too slow !!!!!!
             
         path = path[1:]         # Excluding the node itself
         while len(path) >= 1:
@@ -346,7 +345,7 @@ class Node:
         neighbour_lon = neighbour_coordinates[1] * KM_FACTOR
         neighbour_alt = neighbour_coordinates[2] * KM_FACTOR
 
-        if (distance.distance(self_lat, self_lon, self_alt, neighbour_lat, neighbour_lon, neighbour_alt) < 5550):
+        if (distance.distance(self_lat, self_lon, self_alt, neighbour_lat, neighbour_lon, neighbour_alt) < 5717):
             return True
         
         return False

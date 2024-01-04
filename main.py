@@ -4,20 +4,32 @@ import Node
 import LoadData
 import planned_transmissions as pt
 
-#all_tranmissions = pt.generate_planned_transmission()
-
 print_once = True
 packet_count_IERP = 0
 IARP_time = 0
 IERP_time = 0
 iteration_counter = 0
 
+# Routes for different node populations, from 18-66     (node1, node2, start_time)
 transmissions_for_num_nodes = []
 transmissions_for_num_nodes.append([(0, 5, 0), (6, 15, 5), (10, 14, 11), (11, 7, 17), (9, 13, 23)])
 transmissions_for_num_nodes.append([(0, 7, 0), (2, 26, 5), (22, 11, 11), (15, 8, 17), (27, 20, 23)])
 transmissions_for_num_nodes.append([(0, 4, 0), (34, 25, 5), (9, 12, 11), (32, 2, 17), (39, 8, 23)])
 transmissions_for_num_nodes.append([(48, 52, 0), (33, 12, 5), (28, 7, 11), (51, 2, 17), (42, 20, 23)])
 transmissions_for_num_nodes.append([(58, 7, 0), (44, 19, 5), (13, 29, 11), (35, 20, 17), (8, 2, 23)])
+
+
+###### Helper functions #######
+
+def get_element_for_num_nodes(value):
+    element_mapping = {
+        18: 0,
+        30: 1,
+        42: 2,
+        54: 3,
+        66: 4
+    }
+    return element_mapping.get(value, -1)
 
 def find_node_neighbours(nodes: [], index : int):
     for node in nodes:
@@ -41,16 +53,8 @@ def calculate_execution_time():
     execution_time = execution_time/num_nodes
     yield env.timeout(execution_time)
 
-def get_element_for_num_nodes(value):
-    element_mapping = {
-        18: 0,
-        30: 1,
-        42: 2,
-        54: 3,
-        66: 4
-    }
 
-    return element_mapping.get(value, -1)
+###### Processes #######
 
 def network_process(env, nodes):
     first_run = True
@@ -59,9 +63,9 @@ def network_process(env, nodes):
         if first_run: 
             yield env.process(IARP_process(env, nodes))
             first_run = False
-        #elif (env.now - ran_at_time) >= 30:
-        #    ran_at_time = env.now
-        #    yield env.process(IARP_process(env, nodes))
+        elif (env.now - ran_at_time) >= 30:
+            ran_at_time = env.now
+            yield env.process(IARP_process(env, nodes))
             
         yield env.process(send_data_process(env, nodes))
 
@@ -69,8 +73,8 @@ def IARP_process(env, nodes):
     global iteration_counter
     global IARP_time
     np.random.seed(41)
-    find_node_neighbours(nodes, iteration_counter)
 
+    find_node_neighbours(nodes, iteration_counter)
     print(f"\nIARP starting - Time: {env.now}")
 
     packet_count_iarp = 0
@@ -82,7 +86,6 @@ def IARP_process(env, nodes):
         yield env.process(node.iarp())
         node.routing_table = node.routing_table_new
         node.metrics_table = node.metrics_table_new
-
         node.routing_table = sort_table(node.routing_table)
         node.metrics_table = sort_table(node.metrics_table)
 
@@ -91,7 +94,6 @@ def IARP_process(env, nodes):
             n.packet_count_iarp = 0
         
         packet_count_iarp += packet_count
-        print(f"Node {node.node_id} finished")
 
     start_time = env.now
     yield env.process(calculate_execution_time())
@@ -109,7 +111,6 @@ def send_data_process(env, nodes):
 
             if (start_time < env.now):
                 node_start = env.now
-                #print(f"Node {origin_node_id} trying to send at time: {env.now}")
                 packet_counter = 0
                 
                 yield env.process(nodes[origin_node_id].send_data(destination_node_id))
@@ -131,17 +132,22 @@ def send_data_process(env, nodes):
         else:
             yield env.timeout(0.01)
   
-# Create environment
+
+###### Create environment ######
+            
 env = simpy.Environment()
 
 # Create nodes
 nodes = []
 zone_radius = 2
 num_nodes = 66
+altitude = 718
+
 for i in range(num_nodes):
-    nodes.append(Node.Node(env, i, zone_radius, position=LoadData.get_position_data(i, num_nodes, 718)))
+    nodes.append(Node.Node(env, i, zone_radius, position=LoadData.get_position_data(i, num_nodes, altitude)))
 
 all_tranmissions = transmissions_for_num_nodes[get_element_for_num_nodes(num_nodes)]
+#all_tranmissions = pt.generate_planned_transmission()
 
 env.process(network_process(env, nodes))
 env.run(until=6000)                         # 6000 = 100 minutes in seconds
