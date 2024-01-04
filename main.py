@@ -144,7 +144,7 @@ num_nodes = 66
 altitude = 718
 
 for i in range(num_nodes):
-    nodes.append(Node.Node(env, i, zone_radius, position=LoadData.get_position_data(i, num_nodes, altitude)))
+    nodes.append(Node.Node(env, i, zone_radius, altitude, position=LoadData.get_position_data(i, num_nodes, altitude)))
 
 all_tranmissions = transmissions_for_num_nodes[get_element_for_num_nodes(num_nodes)]
 #all_tranmissions = pt.generate_planned_transmission()

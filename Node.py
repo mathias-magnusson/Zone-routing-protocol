@@ -9,7 +9,7 @@ import simpy
 KM_FACTOR = 0.001
 
 class Node:
-    def __init__(self, env, node_id: int, zone_radius: int, neighbours = None, position = None):
+    def __init__(self, env, node_id: int, zone_radius: int, altitude: int, neighbours = None, position = None):
         self.env = env
         self.node_id = node_id
         self.zone_radius = zone_radius
@@ -26,6 +26,7 @@ class Node:
         self.paths_to_destinations = []
         self.packet_count_iarp = 0
         self.packet_count_ierp = 0
+        self.altitude = altitude
 
     def send_data(self, destination : int):
         if (self.routing_table.get(destination) is not None):
@@ -345,7 +346,8 @@ class Node:
         neighbour_lon = neighbour_coordinates[1] * KM_FACTOR
         neighbour_alt = neighbour_coordinates[2] * KM_FACTOR
 
-        if (distance.distance(self_lat, self_lon, self_alt, neighbour_lat, neighbour_lon, neighbour_alt) < 5717):
+        LOS_distance = self.get_LOS_distance_for_altitude(self.altitude)
+        if (distance.distance(self_lat, self_lon, self_alt, neighbour_lat, neighbour_lon, neighbour_alt) < LOS_distance):
             return True
         
         return False
@@ -376,3 +378,13 @@ class Node:
         transformed_data = 1 - np.exp(power_parameter * half_normal_data)
 
         return transformed_data[0]
+    
+    def get_LOS_distance_for_altitude(self, altitude: int):
+        element_mapping = {
+            518: 4721.63,
+            618: 5236.82,
+            718: 5717.50,
+            818: 6170.96,
+            918: 6600.34
+        }
+        return element_mapping.get(altitude, -1)
