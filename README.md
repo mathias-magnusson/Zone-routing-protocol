@@ -25,13 +25,13 @@ When all routes to a destination have been found the best one, based on the accu
 
 ### Guide
 1. Choose a constellation
-  * Choose number of nodes (18, 30, 42, 54, 66)
-  * Choose Altitude (518, 618, 718, 818, 918)
+    * Choose number of nodes (18, 30, 42, 54, 66)
+    * Choose Altitude (518, 618, 718, 818, 918)
 2. Choose zone radius (1, 2, 3, 4)
 3. Choose manually created routes or generate randomly (uncomment line 150 in main)
 4. Run the simulation
 
-** Note: if more nodes (132, 264, 396, 528) or another constellation architecture (Walker Delta) is neeeded the LoadData file needs to be modified so it loads the correct mobilitu models
+Note: if more nodes (132, 264, 396, 528) or another constellation architecture (Walker Delta) is neeeded, the LoadData file needs to be modified so it loads the correct mobility model.
 
 ## MATLAB
 The MATLAB code is found in the Mobility_models folder, which also includes all the mobility models of different constellations. 
