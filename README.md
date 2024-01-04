@@ -1,46 +1,28 @@
 # Zone-routing-protocol
-Python implementation for Zone Routing Protocol for satellite network
+Python implementation for Zone Routing Protocol in a satellite network
 
-# Set up File Path in the Python project
+## Main
+In main the Nodes (satellites) are created based on a chosen mobility model. Main also creates the SimPy environment where the processes are made.
 
-Follow these steps to set up flexible file paths in your Python project, allowing for easy collaboration and customization.
+### Prosesses
+The simulation consists of three processes created in main. 
+The network_process is the main process, which calls the IARP_process once each 30th second, and calls the send_data_process continuously. 
 
-## 1. Use Relative Paths
+The IARP_process updates the routing tables for each node, and calculates the number of packets and the time it takes to compute them. 
 
-Update your code to use relative paths for accessing the file within your project directory:
-```python
-# Use a relative path
-file_path = 'data/filename.txt'
-```
+The send_data_process checks whether it is time to send some data. If this is true, a route will be computed with IERP if the destination node is not already within the zone of the origin node. 
+When all the possible routes to a destination have been calculated the number of packets and time it took to compute them is printed. 
 
-## 2. Use Environment Variables for Configurations
-```python
-import os
+## Simulation
+The simulation is running for 6000 seconds (100 minutes), which is a bit over one orbit around Earth.
 
-# Define the environment variable to hold the file path
-FILE_PATH = os.environ.get('MY_PROJECT_FILE_PATH', 'data/filename.txt')
+It is run by choosing a mobility model / satellite constellation. This model is based on the number of nodes (num_nodes) and the altitude chosen. 
+Furthermore, in main the zone radius is chosen, to figure out when it is optimal.  
 
-# Use FILE_PATH in your code to read the file
-with open(FILE_PATH, 'r') as file:
-    content = file.read()
-```
+The planned tranmissions are loaded based on the number of nodes if the manually created planned_transmissions are used. Otherwise the transmissions can be generated randomly with generate_planned_transmission().
 
-## 3. Set the Environment Variable
-Terminal (temporary setting):
-```bash
-export MY_PROJECT_FILE_PATH=/path/to/your/file/filename.txt
-```
+When all routes to a destination have been found the best one, based on the accumulated ETX value, is printed and can be evaluated with MATLAB in the SatelliteView.
 
-Environment Configuration File (e.g., .env): Create a '.env' file in your project's root folder, and add line below to the .env-file.
-```plaintext
-MY_PROJECT_FILE_PATH=/path/to/your/file/filename.txt
-```
-
-## 4. Add .env to .gitignore
-Ensure that the .env file is added to your .gitignore to prevent it from being pushed to the Git repository. This keeps the file path configurations local to each developer's environment. Add the following line to your .gitignore file:
-file configuration as below.
-```plaintext
-.env
-```
-
-
+## MATLAB
+The MATLAB code is found in the Mobility_models folder, which also includes all the mobility models of different constellations. 
+Within the MATLAB file called MobilityModel.m, new constellations can be created if desired. Furthermore, by looking at the SatelliteView, the routes found in Python can be verified. 
